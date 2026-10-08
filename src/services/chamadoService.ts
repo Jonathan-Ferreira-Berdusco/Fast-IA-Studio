@@ -527,11 +527,4 @@ export class ChamadoService {
     this.saveChamados(list);
     return os;
   }
-
-  static resetDatabase(): OrdemServico[] {
-    this.saveChamados(INITIAL_CHAMADOS);
-    localStorage.setItem(STORAGE_KEY_CLIENTES, JSON.stringify(CLIENTES_MOCK));
-    localStorage.setItem(STORAGE_KEY_TECNICOS, JSON.stringify(TECNICOS_MOCK));
-    return INITIAL_CHAMADOS;
-  }
 }

@@ -1,11 +1,6 @@
 import React from 'react';
-import { Tecnico } from '../types';
 import {
-  Wrench,
-  RefreshCw,
   Plus,
-  Building,
-  Shield,
   LogOut,
 } from 'lucide-react';
 
@@ -14,7 +9,6 @@ interface Props {
   totalChamados: number;
   totalConcluidos: number;
   onOpenNovaOS: () => void;
-  onResetDatabase: () => void;
   onLogout?: () => void;
 }
 
@@ -23,7 +17,6 @@ export const AdminHeader: React.FC<Props> = ({
   totalChamados,
   totalConcluidos,
   onOpenNovaOS,
-  onResetDatabase,
   onLogout,
 }) => {
   return (
@@ -53,16 +46,6 @@ export const AdminHeader: React.FC<Props> = ({
               <span className="font-bold text-emerald-300">{totalConcluidos}</span>
             </div>
           </div>
-
-          {/* Reset Demo Data button */}
-          <button
-            onClick={onResetDatabase}
-            title="Resetar Dados de Demonstração"
-            className="py-2 px-3 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/20 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
-          >
-            <RefreshCw className="w-4 h-4 text-blue-200" />
-            <span className="hidden md:inline">Resetar Demo</span>
-          </button>
 
           {/* Nova OS */}
           <button

@@ -92,13 +92,6 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout }) => {
     loadData();
   }, []);
 
-  const handleResetData = () => {
-    if (confirm('Deseja resetar todas as Ordens de Serviço, Clientes e Técnicos para os dados originais?')) {
-      ChamadoService.resetDatabase();
-      loadData();
-    }
-  };
-
   // --- DATE FILTER LOGIC ---
   const chamadosFiltradosPorData = useMemo(() => {
     if (periodoSelecionado === 'TODOS') return chamados;
@@ -356,7 +349,6 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout }) => {
             setOsEdicao(null);
             setShowNovaOSModal(true);
           }}
-          onResetDatabase={handleResetData}
           onLogout={onLogout}
         />
 

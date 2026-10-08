@@ -26,13 +26,6 @@ export const HomeView: React.FC<Props> = ({ tecnico, onLogout, onSelectChamado, 
     loadChamados();
   }, [filterStatus, searchQuery]);
 
-  const handleReset = () => {
-    if (confirm('Deseja resetar os chamados para o estado original de demonstração?')) {
-      ChamadoService.resetDatabase();
-      loadChamados();
-    }
-  };
-
   // Stats calculation
   const totalCount = chamados.length;
   const abertosCount = chamados.filter((c) => c.status === 'ABERTO').length;
@@ -50,7 +43,7 @@ export const HomeView: React.FC<Props> = ({ tecnico, onLogout, onSelectChamado, 
 
   return (
     <div className="min-h-screen bg-background pb-12 text-foreground">
-      <Header tecnico={tecnico} onLogout={onLogout} onResetData={handleReset} onSwitchToAdmin={onSwitchToAdmin} />
+      <Header tecnico={tecnico} onLogout={onLogout} onSwitchToAdmin={onSwitchToAdmin} />
 
       <main className="max-w-7xl mx-auto px-4 pt-6 space-y-6">
         {/* Welcome & Stats Row */}

@@ -1,16 +1,15 @@
 import React from 'react';
 import { Tecnico } from '../types';
-import { LogOut, Wrench, RefreshCw, UserCheck } from 'lucide-react';
+import { LogOut, Wrench, UserCheck } from 'lucide-react';
 
 interface HeaderProps {
   tecnico: Tecnico | null;
   onLogout: () => void;
-  onResetData?: () => void;
   onSwitchToAdmin?: () => void;
   title?: string;
 }
 
-export const Header: React.FC<HeaderProps> = ({ tecnico, onLogout, onResetData, onSwitchToAdmin, title }) => {
+export const Header: React.FC<HeaderProps> = ({ tecnico, onLogout, onSwitchToAdmin, title }) => {
   return (
     <header className="bg-card/95 backdrop-blur-md border-b border-border sticky top-0 z-40 px-4 py-3">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
@@ -57,16 +56,6 @@ export const Header: React.FC<HeaderProps> = ({ tecnico, onLogout, onResetData, 
                 <p className="text-[10px] text-accent leading-tight">{tecnico.especialidade || 'Técnico Autorizado'}</p>
               </div>
             </div>
-
-            {onResetData && (
-              <button
-                onClick={onResetData}
-                title="Resetar Banco de Dados Simulado"
-                className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors border border-transparent hover:border-border"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </button>
-            )}
 
             <button
               onClick={onLogout}
