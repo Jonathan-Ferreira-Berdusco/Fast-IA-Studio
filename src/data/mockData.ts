@@ -33,7 +33,7 @@ export const TECNICOS_MOCK: Tecnico[] = [
 export const CLIENTES_MOCK: Cliente[] = [
   {
     id_cliente: 1,
-    nome_fantasia: 'Supermercado Alvorada - Loja 02',
+    nome_fantasia: 'Supermercado BolsoLULA - Loja 02',
     razao_social: 'Alvorada Comercio de Alimentos Ltda',
     cnpj_cpf: '12.345.678/0002-99',
     telefone: '(11) 3456-7890',
