@@ -57,13 +57,13 @@ export const ModalEquipamentoDefeito: React.FC<Props> = ({
     setNovoDefeitoDesc('');
   };
 
-  const handleToggleDefeito = (id: string) => {
+  const handleToggleDefeito = (id: string | number) => {
     setDefeitos(
       defeitos.map((d) => (d.id_defeito === id ? { ...d, solucionado: !d.solucionado } : d))
     );
   };
 
-  const handleRemoveDefeito = (id: string) => {
+  const handleRemoveDefeito = (id: string | number) => {
     setDefeitos(defeitos.filter((d) => d.id_defeito !== id));
   };
 
@@ -79,7 +79,7 @@ export const ModalEquipamentoDefeito: React.FC<Props> = ({
     setFotos([...fotos, novaFoto]);
   };
 
-  const handleRemoveFoto = (id: string) => {
+  const handleRemoveFoto = (id: string | number) => {
     setFotos(fotos.filter((f) => f.id_foto !== id));
   };
 

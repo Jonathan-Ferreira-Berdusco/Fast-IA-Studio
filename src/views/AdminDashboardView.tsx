@@ -40,11 +40,12 @@ import {
 
 interface Props {
   onLogout?: () => void;
+  onSwitchToTechView?: () => void;
 }
 
 export type PeriodoFiltro = 'TODOS' | 'HOJE' | 'ULTIMOS_7' | 'ESTE_MES' | 'ULTIMOS_30' | 'CUSTOM';
 
-export const AdminDashboardView: React.FC<Props> = ({ onLogout }) => {
+export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechView }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const [chamados, setChamados] = useState<OrdemServico[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -90,6 +91,11 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout }) => {
 
   useEffect(() => {
     loadData();
+    ChamadoService.syncWithBackend().catch(() => {});
+    const unsubscribe = ChamadoService.subscribe(() => {
+      loadData();
+    });
+    return () => unsubscribe();
   }, []);
 
   // --- DATE FILTER LOGIC ---
@@ -313,9 +319,9 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout }) => {
 
   const filteredClientes = clientes.filter(
     (c) =>
-      c.nome_fantasia.toLowerCase().includes(searchCliente.toLowerCase()) ||
-      c.cidade.toLowerCase().includes(searchCliente.toLowerCase()) ||
-      c.cnpj_cpf.includes(searchCliente)
+      (c.nome_fantasia || c.razao_social || '').toLowerCase().includes(searchCliente.toLowerCase()) ||
+      (c.cidade || '').toLowerCase().includes(searchCliente.toLowerCase()) ||
+      (c.cnpj_cpf || '').includes(searchCliente)
   );
 
   const filteredTecnicos = tecnicos.filter(
@@ -350,6 +356,7 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout }) => {
             setShowNovaOSModal(true);
           }}
           onLogout={onLogout}
+          onSwitchToTechView={onSwitchToTechView}
         />
 
         <main className="p-6 space-y-6 max-w-7xl mx-auto w-full">

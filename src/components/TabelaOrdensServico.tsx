@@ -41,9 +41,9 @@ export const TabelaOrdensServico: React.FC<Props> = ({
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const matchCode = item.codigo_os.toLowerCase().includes(q);
-      const matchClient = item.cliente.nome_fantasia.toLowerCase().includes(q);
-      const matchCity = item.cliente.cidade.toLowerCase().includes(q);
-      const matchTec = item.tecnico?.nome.toLowerCase().includes(q);
+      const matchClient = (item.cliente.nome_fantasia || item.cliente.razao_social || item.cliente_nome || '').toLowerCase().includes(q);
+      const matchCity = (item.cliente.cidade || '').toLowerCase().includes(q);
+      const matchTec = (item.tecnico?.nome || '').toLowerCase().includes(q);
       const matchDesc = item.descricao_cliente.toLowerCase().includes(q);
       return matchCode || matchClient || matchCity || matchTec || matchDesc;
     }

@@ -33,7 +33,7 @@ export const ModalNovaOS: React.FC<Props> = ({
   useEffect(() => {
     if (osEdicao) {
       setIdCliente(osEdicao.id_cliente);
-      setIdTecnico(osEdicao.id_tecnico_atribuido);
+      setIdTecnico(osEdicao.id_tecnico_atribuido || tecnicos[0]?.id_tecnico || 1);
       setPrioridade(osEdicao.prioridade);
       setDataAgendamento(osEdicao.data_agendamento || '');
       setDescricaoCliente(osEdicao.descricao_cliente || '');

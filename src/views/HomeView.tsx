@@ -24,14 +24,16 @@ export const HomeView: React.FC<Props> = ({ tecnico, onLogout, onSelectChamado, 
 
   useEffect(() => {
     loadChamados();
+    const unsubscribe = ChamadoService.subscribe(loadChamados);
+    return () => unsubscribe();
   }, [filterStatus, searchQuery]);
 
   // Stats calculation
   const totalCount = chamados.length;
-  const abertosCount = chamados.filter((c) => c.status === 'ABERTO').length;
-  const emAndamentoCount = chamados.filter((c) => c.status === 'EM_ATENDIMENTO').length;
-  const pausadosCount = chamados.filter((c) => c.status === 'PAUSADO').length;
-  const concluidosCount = chamados.filter((c) => c.status === 'CONCLUIDO').length;
+  const abertosCount = chamados.filter((c) => c.status === 'ABERTO' || c.status === 'Aberto' || c.status === 'AGENDADO' || c.status === 'Agendado').length;
+  const emAndamentoCount = chamados.filter((c) => c.status === 'EM_ATENDIMENTO' || c.status === 'Em Atendimento').length;
+  const pausadosCount = chamados.filter((c) => c.status === 'PAUSADO' || c.status === 'Pausado').length;
+  const concluidosCount = chamados.filter((c) => c.status === 'CONCLUIDO' || c.status === 'FINALIZADO' || c.status === 'Finalizado').length;
 
   const tabs: { key: StatusChamado | 'TODOS'; label: string; count: number }[] = [
     { key: 'TODOS', label: 'Todos', count: totalCount },

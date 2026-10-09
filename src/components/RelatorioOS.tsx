@@ -103,11 +103,11 @@ export const RelatorioOS: React.FC<Props> = ({ chamado, onClose }) => {
                     <p className="text-muted-foreground">Modelo: {eq.modelo} | S/N: {eq.numero_serie}</p>
                     
                     {/* Defects */}
-                    {eq.defeitos.length > 0 && (
+                    {(eq.defeitos?.length ?? 0) > 0 && (
                       <div className="mt-2 text-foreground">
                         <span className="font-semibold text-muted-foreground">Defeitos Constatados:</span>
                         <ul className="list-disc list-inside mt-0.5 pl-1 space-y-0.5 text-foreground">
-                          {eq.defeitos.map((d, di) => (
+                          {(eq.defeitos || []).map((d, di) => (
                             <li key={di}>
                               {d.descricao} {d.solucionado ? '(Sanado)' : '(Pendente)'}
                             </li>
@@ -117,13 +117,13 @@ export const RelatorioOS: React.FC<Props> = ({ chamado, onClose }) => {
                     )}
 
                     {/* Materials */}
-                    {eq.materiais.length > 0 && (
+                    {(eq.materiais?.length ?? 0) > 0 && (
                       <div className="mt-2 text-foreground">
                         <span className="font-semibold text-muted-foreground">Peças Utilizadas:</span>
                         <div className="flex flex-wrap gap-2 mt-1">
-                          {eq.materiais.map((m, mi) => (
+                          {(eq.materiais || []).map((m, mi) => (
                             <span key={mi} className="bg-secondary px-2 py-0.5 rounded border border-border text-foreground font-medium">
-                              {m.quantidade}x {m.descricao}
+                              {m.quantidade}x {m.descricao || m.nome}
                             </span>
                           ))}
                         </div>

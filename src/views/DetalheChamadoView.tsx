@@ -47,6 +47,13 @@ export const DetalheChamadoView: React.FC<Props> = ({ id_os, onBack }) => {
   const [showAssinaturaModal, setShowAssinaturaModal] = useState(false);
   const [showRelatorio, setShowRelatorio] = useState(false);
 
+  // API Custos & Confirmations state
+  const [showCustosModal, setShowCustosModal] = useState(false);
+  const [custosData, setCustosData] = useState<any | null>(null);
+  const [loadingCustos, setLoadingCustos] = useState(false);
+  const [showConfirmConcluir, setShowConfirmConcluir] = useState(false);
+  const [avisoAssinatura, setAvisoAssinatura] = useState(false);
+
   const loadData = () => {
     const data = ChamadoService.getChamadoPorId(id_os);
     setChamado(data ? { ...data } : null);
@@ -54,6 +61,8 @@ export const DetalheChamadoView: React.FC<Props> = ({ id_os, onBack }) => {
 
   useEffect(() => {
     loadData();
+    const unsubscribe = ChamadoService.subscribe(loadData);
+    return () => unsubscribe();
   }, [id_os]);
 
   if (!chamado) {
@@ -156,23 +165,34 @@ export const DetalheChamadoView: React.FC<Props> = ({ id_os, onBack }) => {
   };
 
   const handleConcluirOS = () => {
-    if (!chamado.assinatura) {
-      alert('Por favor, obtenha a assinatura do cliente antes de finalizar a OS.');
+    if (!chamado.assinatura && !chamado.assinatura_cliente_url) {
+      setAvisoAssinatura(true);
       return;
     }
+    setShowConfirmConcluir(true);
+  };
 
-    if (confirm('Confirmar o encerramento definitivo desta Ordem de Serviço?')) {
-      const updated = ChamadoService.concluirChamado(id_os, 'Atendimento efetuado em conformidade com as normas técnicas FAST Gôndolas & Check-outs.');
-      setChamado({ ...updated });
-    }
+  const handleExecuteConcluir = () => {
+    const updated = ChamadoService.concluirChamado(id_os, 'Atendimento efetuado em conformidade com as normas técnicas FAST Gôndolas & Check-outs.');
+    setChamado({ ...updated });
+    setShowConfirmConcluir(false);
+  };
+
+  const handleAbrirCustos = async () => {
+    setLoadingCustos(true);
+    setShowCustosModal(true);
+    const data = await ChamadoService.calcularCustos(id_os);
+    setCustosData(data);
+    setLoadingCustos(false);
   };
 
   // State condition checks
-  const isPausado = chamado.status === 'PAUSADO';
-  const isConcluido = chamado.status === 'CONCLUIDO';
-  const temIdaIniciada = Boolean(visita?.km_inicio_ida);
-  const temChegadaCliente = Boolean(visita?.hora_chegada_cliente);
-  const temVoltaIniciada = Boolean(visita?.km_inicio_volta);
+  const normStatus = String(chamado.status).toUpperCase();
+  const isPausado = normStatus === 'PAUSADO';
+  const isConcluido = normStatus === 'CONCLUIDO' || normStatus === 'FINALIZADO';
+  const temIdaIniciada = Boolean(visita?.km_inicio_ida || visita?.hora_inicio_ida);
+  const temChegadaCliente = Boolean(visita?.hora_chegada_cliente || visita?.hora_inicio_atendimento);
+  const temVoltaIniciada = Boolean(visita?.km_inicio_volta || visita?.hora_inicio_volta);
 
   return (
     <div className="min-h-screen bg-background pb-16 text-foreground font-sans">
@@ -194,13 +214,23 @@ export const DetalheChamadoView: React.FC<Props> = ({ id_os, onBack }) => {
             <StatusBadge status={chamado.status} size="sm" />
           </div>
 
-          <button
-            onClick={() => setShowRelatorio(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary hover:bg-muted text-accent border border-border rounded-lg text-xs font-semibold transition-all cursor-pointer"
-          >
-            <FileText className="w-4 h-4" />
-            <span className="hidden sm:inline">Relatório OS</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleAbrirCustos}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+            >
+              <DollarSign className="w-4 h-4" />
+              <span className="hidden sm:inline">Custos (API)</span>
+            </button>
+
+            <button
+              onClick={() => setShowRelatorio(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary hover:bg-muted text-accent border border-border rounded-lg text-xs font-semibold transition-all cursor-pointer"
+            >
+              <FileText className="w-4 h-4" />
+              <span className="hidden sm:inline">Relatório OS</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -216,7 +246,7 @@ export const DetalheChamadoView: React.FC<Props> = ({ id_os, onBack }) => {
                 <h3 className="text-sm font-bold text-amber-800">OS Atualmente Pausada</h3>
                 <p className="text-xs text-amber-700/80">
                   Motivo:{' '}
-                  <strong>{visita?.pausas[visita.pausas.length - 1]?.motivo}</strong>
+                  <strong>{visita?.pausas?.[(visita.pausas?.length || 1) - 1]?.motivo || 'Em Pausa Operacional'}</strong>
                 </p>
               </div>
             </div>
@@ -531,20 +561,24 @@ export const DetalheChamadoView: React.FC<Props> = ({ id_os, onBack }) => {
         </div>
 
         {/* Signature Status Component */}
-        {chamado.assinatura && (
+        {(chamado.assinatura || chamado.assinatura_cliente_url) && (
           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-3">
             <h2 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
               <PenTool className="w-4 h-4 text-accent" /> Assinatura do Cliente Coletada
             </h2>
             <div className="flex flex-wrap items-center justify-between gap-4 bg-secondary/50 p-4 rounded-xl border border-border">
               <div className="text-xs space-y-1">
-                <p className="font-bold text-foreground">{chamado.assinatura.nome_responsavel}</p>
-                <p className="text-muted-foreground">RG/CPF: {chamado.assinatura.documento}</p>
-                <p className="text-muted-foreground">Cargo: {chamado.assinatura.cargo_funcao}</p>
-                <p className="text-muted-foreground text-[10px]">Assinado em: {chamado.assinatura.data_assinatura}</p>
+                <p className="font-bold text-foreground">{chamado.assinatura?.nome_responsavel || c.contato_responsavel}</p>
+                <p className="text-muted-foreground">RG/CPF: {chamado.assinatura?.documento || 'Documento Registrado'}</p>
+                <p className="text-muted-foreground">Cargo: {chamado.assinatura?.cargo_funcao || 'Responsável no Local'}</p>
+                <p className="text-muted-foreground text-[10px]">Assinado em: {chamado.assinatura?.data_assinatura || 'Atendimento'}</p>
               </div>
               <div className="bg-white p-2 rounded-xl border border-border shadow-xs">
-                <img src={chamado.assinatura.assinatura_url} alt="Assinatura" className="h-14 object-contain" />
+                <img
+                  src={chamado.assinatura?.assinatura_url || chamado.assinatura_cliente_url}
+                  alt="Assinatura"
+                  className="h-14 object-contain"
+                />
               </div>
             </div>
           </div>
@@ -601,6 +635,127 @@ export const DetalheChamadoView: React.FC<Props> = ({ id_os, onBack }) => {
 
       {showRelatorio && (
         <RelatorioOS chamado={chamado} onClose={() => setShowRelatorio(false)} />
+      )}
+
+      {/* Modal Custos da API FastAPI */}
+      {showCustosModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-card border border-border rounded-3xl max-w-lg w-full p-6 shadow-2xl relative">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <DollarSign className="w-5 h-5 text-emerald-500" />
+                <h3 className="text-base font-bold text-foreground">Custos Calculados da OS (FastAPI)</h3>
+              </div>
+              <button
+                onClick={() => setShowCustosModal(false)}
+                className="text-muted-foreground hover:text-foreground text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="py-4 space-y-3">
+              {loadingCustos ? (
+                <div className="text-center py-8 text-xs text-muted-foreground">
+                  Consultando endpoint /api/chamados/{id_os}/custos...
+                </div>
+              ) : custosData ? (
+                <div className="space-y-3 text-xs">
+                  <div className="grid grid-cols-2 gap-2 bg-secondary/50 p-3 rounded-xl border border-border">
+                    <div>
+                      <span className="text-muted-foreground block text-[10px]">Materiais:</span>
+                      <strong className="text-foreground">R$ {Number(custosData.custo_total_materiais || 0).toFixed(2)}</strong>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[10px]">Quilometragem (KM):</span>
+                      <strong className="text-foreground">R$ {Number(custosData.custo_total_km || 0).toFixed(2)}</strong>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[10px]">Pedágio:</span>
+                      <strong className="text-foreground">R$ {Number(custosData.custo_total_pedagio || 0).toFixed(2)}</strong>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[10px]">Frete Devolução:</span>
+                      <strong className="text-foreground">R$ {Number(custosData.custo_total_frete || 0).toFixed(2)}</strong>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[10px]">Tempo de Serviço:</span>
+                      <strong className="text-foreground">R$ {Number(custosData.custo_total_servico || 0).toFixed(2)}</strong>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[10px]">Tempo de Deslocamento:</span>
+                      <strong className="text-foreground">R$ {Number(custosData.custo_total_deslocamento || 0).toFixed(2)}</strong>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-emerald-500/15 border border-emerald-500/30 rounded-xl flex items-center justify-between text-emerald-800 dark:text-emerald-300">
+                    <span className="font-bold text-xs">Total Geral da Ordem de Serviço:</span>
+                    <strong className="text-base font-extrabold">R$ {Number(custosData.total_geral || 0).toFixed(2)}</strong>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-6 text-xs text-muted-foreground">
+                  Backend offline ou sem custos registrados para esta OS ainda.
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setShowCustosModal(false)}
+                className="px-4 py-2 bg-secondary hover:bg-muted text-foreground border border-border rounded-xl text-xs font-bold"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmação de Conclusão */}
+      {showConfirmConcluir && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <h3 className="text-sm font-bold text-foreground">Confirmar Encerramento Definitivo?</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Deseja finalizar esta Ordem de Serviço? Ela será marcada como concluída e os custos finais serão compilados.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowConfirmConcluir(false)}
+                className="px-4 py-2 bg-secondary hover:bg-muted text-foreground rounded-xl text-xs font-semibold"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleExecuteConcluir}
+                className="px-4 py-2 bg-success text-white hover:bg-success/90 rounded-xl text-xs font-bold"
+              >
+                Confirmar Conclusão
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Aviso de Assinatura Necessária */}
+      {avisoAssinatura && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <h3 className="text-sm font-bold text-foreground">Assinatura Obrigatória</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Por favor, colete a assinatura do responsável no cliente antes de encerrar esta Ordem de Serviço.
+            </p>
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setAvisoAssinatura(false)}
+                className="px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

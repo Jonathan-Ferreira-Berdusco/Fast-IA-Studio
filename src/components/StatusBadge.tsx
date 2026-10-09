@@ -1,14 +1,30 @@
 import React from 'react';
 import { StatusChamado } from '../types';
-import { Clock, PlayCircle, PauseCircle, CheckCircle2, XCircle } from 'lucide-react';
+import { Clock, PlayCircle, PauseCircle, CheckCircle2, XCircle, Calendar, AlertCircle } from 'lucide-react';
 
 interface Props {
   status: StatusChamado;
   size?: 'sm' | 'md' | 'lg';
 }
 
+export function normalizeStatus(status: StatusChamado): string {
+  if (!status) return 'ABERTO';
+  const s = String(status).trim().toUpperCase();
+  if (s === 'ABERTO') return 'ABERTO';
+  if (s === 'AGENDADO') return 'AGENDADO';
+  if (s === 'EM ATENDIMENTO' || s === 'EM_ATENDIMENTO') return 'EM_ATENDIMENTO';
+  if (s === 'PENDENTE') return 'PENDENTE';
+  if (s === 'PAUSADO') return 'PAUSADO';
+  if (s === 'FINALIZADO' || s === 'CONCLUIDO' || s === 'CONCLUÍDO') return 'CONCLUIDO';
+  if (s === 'CANCELADO') return 'CANCELADO';
+  if (s === 'AGUARDANDO REAGENDAMENTO' || s === 'AGUARDANDO_REAGENDAMENTO') return 'AGUARDANDO_REAGENDAMENTO';
+  return s;
+}
+
 export const StatusBadge: React.FC<Props> = ({ status, size = 'md' }) => {
-  const configs: Record<StatusChamado, { label: string; bg: string; text: string; border: string; icon: React.ReactNode }> = {
+  const norm = normalizeStatus(status);
+
+  const configs: Record<string, { label: string; bg: string; text: string; border: string; icon: React.ReactNode }> = {
     ABERTO: {
       label: 'Aberto',
       bg: 'bg-info/15',
@@ -16,12 +32,26 @@ export const StatusBadge: React.FC<Props> = ({ status, size = 'md' }) => {
       border: 'border-info/30',
       icon: <Clock className="w-3.5 h-3.5" />,
     },
+    AGENDADO: {
+      label: 'Agendado',
+      bg: 'bg-primary/15',
+      text: 'text-primary',
+      border: 'border-primary/30',
+      icon: <Calendar className="w-3.5 h-3.5" />,
+    },
     EM_ATENDIMENTO: {
       label: 'Em Atendimento',
       bg: 'bg-accent/15',
       text: 'text-accent',
       border: 'border-accent/40',
       icon: <PlayCircle className="w-3.5 h-3.5" />,
+    },
+    PENDENTE: {
+      label: 'Pendente',
+      bg: 'bg-amber-500/15',
+      text: 'text-amber-500',
+      border: 'border-amber-500/30',
+      icon: <AlertCircle className="w-3.5 h-3.5" />,
     },
     PAUSADO: {
       label: 'Pausado',
@@ -44,9 +74,16 @@ export const StatusBadge: React.FC<Props> = ({ status, size = 'md' }) => {
       border: 'border-destructive/30',
       icon: <XCircle className="w-3.5 h-3.5" />,
     },
+    AGUARDANDO_REAGENDAMENTO: {
+      label: 'Aguardando Reagendamento',
+      bg: 'bg-purple-500/15',
+      text: 'text-purple-500',
+      border: 'border-purple-500/30',
+      icon: <Calendar className="w-3.5 h-3.5" />,
+    },
   };
 
-  const c = configs[status] || configs.ABERTO;
+  const c = configs[norm] || configs.ABERTO;
 
   const sizeClasses = {
     sm: 'px-2 py-0.5 text-xs gap-1',
@@ -61,4 +98,3 @@ export const StatusBadge: React.FC<Props> = ({ status, size = 'md' }) => {
     </span>
   );
 };
-
