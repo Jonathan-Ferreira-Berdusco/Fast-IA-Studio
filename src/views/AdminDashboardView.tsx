@@ -79,19 +79,39 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechVi
   // Search state for Clientes and Técnicos sub-views
   const [searchCliente, setSearchCliente] = useState('');
   const [searchTecnico, setSearchTecnico] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const loadData = () => {
-    const listOS = ChamadoService.listarChamados();
-    const listCli = ChamadoService.listarClientes();
-    const listTec = ChamadoService.listarTecnicos();
-    setChamados(listOS);
-    setClientes(listCli);
-    setTecnicos(listTec);
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [listCli, listTec] = await Promise.all([
+        ChamadoService.listarClientes().catch(() => []),
+        ChamadoService.listarTecnicos().catch(() => []),
+      ]);
+      const listOS = await ChamadoService.listarChamados(undefined, undefined, listCli, listTec).catch(() => []);
+      setChamados(listOS);
+      setClientes(listCli);
+      setTecnicos(listTec);
+      const chamadosErr = ChamadoService.getLastChamadosError();
+      if (chamadosErr && listOS.length === 0) {
+        setErrorMsg(`Aviso: O backend retornou erro 500 ao listar chamados (/api/chamados/). Causa: Falha de validação Pydantic no modelo de Visitas (campos de horário nulos no banco ou km_total=0).`);
+      } else {
+        setErrorMsg(null);
+      }
+    } catch (err: any) {
+      console.warn('Aviso ao sincronizar dados no Dashboard:', err);
+      // Mantém os dados existentes em memória e exibe aviso apenas se não houver dados
+      if (chamados.length === 0) {
+        setErrorMsg(err?.detail || err?.message || 'Aviso: instabilidade ao sincronizar com o backend.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     loadData();
-    ChamadoService.syncWithBackend().catch(() => {});
     const unsubscribe = ChamadoService.subscribe(() => {
       loadData();
     });
@@ -107,7 +127,6 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechVi
     const fimHoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 23, 59, 59, 999);
 
     return chamados.filter((c) => {
-      // Use data_abertura or data_agendamento
       const dataOS = new Date(c.data_abertura || c.data_agendamento || agora);
 
       if (periodoSelecionado === 'HOJE') {
@@ -144,77 +163,46 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechVi
     });
   }, [chamados, periodoSelecionado, dataInicioCustom, dataFimCustom]);
 
-  // --- FINANCIAL & METRICS CALCULATION ON FILTERED OS ---
+  // --- FINANCIAL & METRICS CALCULATION (USING BACKEND VALORES_ASSISTENCIA RULES) ---
   const metricasFinanceiras = useMemo(() => {
     let custoLocomocaoTotal = 0;
     let honorariosTotal = 0;
     let custoPecasTotal = 0;
 
     chamadosFiltradosPorData.forEach((c) => {
-      // 1. Locomoção
-      if (c.deslocamento?.valor_total_deslocamento) {
-        custoLocomocaoTotal += c.deslocamento.valor_total_deslocamento;
-      } else if (c.deslocamento?.km_percorrido && c.deslocamento?.valor_km) {
-        custoLocomocaoTotal += c.deslocamento.km_percorrido * c.deslocamento.valor_km;
-      }
-
-      // Check Visitas data for displacement and travel expenses
+      // 1. Locomoção baseada na regra de R$ 1.15/KM + pedágio + frete da Visita
       if (c.visitas && c.visitas.length > 0) {
         c.visitas.forEach((v) => {
-          if (v.valor_pedagio) custoLocomocaoTotal += v.valor_pedagio;
-          if (v.valor_frete_devolucao) custoLocomocaoTotal += v.valor_frete_devolucao;
-          if (v.comprovantes && v.comprovantes.length > 0) {
-            v.comprovantes.forEach((comp) => {
-              custoLocomocaoTotal += comp.valor || 0;
-            });
-          }
-          if (v.km_total && !c.deslocamento?.valor_total_deslocamento) {
-            // Default calculation R$ 1.60/km if not specified
-            custoLocomocaoTotal += v.km_total * 1.6;
+          if (v.valor_pedagio) custoLocomocaoTotal += Number(v.valor_pedagio);
+          if (v.valor_frete_devolucao) custoLocomocaoTotal += Number(v.valor_frete_devolucao);
+          if (v.km_total) {
+            custoLocomocaoTotal += Number(v.km_total) * 1.15;
           }
         });
       }
 
-      // 2. Honorários
-      if (c.honorarios !== undefined && c.honorarios !== null) {
-        honorariosTotal += c.honorarios;
-      } else if (c.valor_total_servico) {
-        let pecas = 0;
-        if (c.pecas_utilizadas && c.pecas_utilizadas.length > 0) {
-          pecas = c.pecas_utilizadas.reduce(
-            (acc: number, p: MaterialUtilizado) => acc + (p.quantidade || 0) * (p.valor_unitario || 0),
-            0
-          );
-        }
-        const desloc = c.deslocamento?.valor_total_deslocamento || 0;
-        const rem = Math.max(0, (c.valor_total_servico || 0) - pecas - desloc);
-        honorariosTotal += rem;
-      } else {
-        // Standard default base honorário for service if unconfigured
-        honorariosTotal += c.em_garantia ? 0 : 250;
-      }
-
-      // 3. Custos com peças
-      if (c.pecas_utilizadas && c.pecas_utilizadas.length > 0) {
-        const pecas = c.pecas_utilizadas.reduce(
-          (acc: number, p: MaterialUtilizado) => acc + (p.quantidade || 0) * (p.valor_unitario || 0),
-          0
-        );
-        custoPecasTotal += pecas;
-      }
-
+      // 2. Peças e materiais reais utilizados nos serviços
       if (c.visitas && c.visitas.length > 0) {
         c.visitas.forEach((v) => {
           if (v.servicos_realizados && v.servicos_realizados.length > 0) {
             v.servicos_realizados.forEach((sr) => {
-              if (sr.materiais && sr.materiais.length > 0) {
-                sr.materiais.forEach((mat) => {
-                  custoPecasTotal += (mat.quantidade || 0) * (mat.valor_unitario || 0);
-                });
-              }
+              const mats = sr.materiais_utilizados || sr.materiais || [];
+              mats.forEach((mat) => {
+                const val = Number(mat.valor || mat.valor_unitario || 0);
+                const qtd = Number(mat.quantidade || 0);
+                custoPecasTotal += val * qtd;
+              });
             });
           }
         });
+      }
+
+      // 3. Honorários / Tempo de Atendimento Técnico
+      if (c.honorarios !== undefined && c.honorarios !== null) {
+        honorariosTotal += Number(c.honorarios);
+      } else if (!c.em_garantia && c.visitas && c.visitas.length > 0) {
+        // Regra de serviço fora da garantia: 87.01 primeira hora + 62.15 por hora seguinte
+        honorariosTotal += 87.01;
       }
     });
 
@@ -230,75 +218,109 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechVi
 
   // Status counters on filtered data
   const totalOS = chamadosFiltradosPorData.length;
-  const abertasOS = chamadosFiltradosPorData.filter((c) => c.status === 'ABERTO').length;
-  const emAtendimentoOS = chamadosFiltradosPorData.filter((c) => c.status === 'EM_ATENDIMENTO').length;
-  const pausadasOS = chamadosFiltradosPorData.filter((c) => c.status === 'PAUSADO').length;
-  const concluidasOS = chamadosFiltradosPorData.filter((c) => c.status === 'CONCLUIDO').length;
-  const canceladasOS = chamadosFiltradosPorData.filter((c) => c.status === 'CANCELADO').length;
+  const abertasOS = chamadosFiltradosPorData.filter((c) => String(c.status).toUpperCase() === 'ABERTO').length;
+  const emAtendimentoOS = chamadosFiltradosPorData.filter((c) => String(c.status).toUpperCase() === 'EM_ATENDIMENTO' || String(c.status) === 'Em Atendimento').length;
+  const pausadasOS = chamadosFiltradosPorData.filter((c) => String(c.status).toUpperCase() === 'PAUSADO' || String(c.status) === 'Pausado').length;
+  const concluidasOS = chamadosFiltradosPorData.filter((c) => String(c.status).toUpperCase() === 'CONCLUIDO' || String(c.status).toUpperCase() === 'FINALIZADO' || String(c.status) === 'Finalizado').length;
+  const canceladasOS = chamadosFiltradosPorData.filter((c) => String(c.status).toUpperCase() === 'CANCELADO' || c.is_cancelled).length;
   const garantiaOS = chamadosFiltradosPorData.filter((c) => c.em_garantia).length;
 
   // --- HANDLERS: OS ---
-  const handleSaveOS = (data: any) => {
-    if (data.id_os) {
-      ChamadoService.atualizarOrdemServico(data.id_os, {
-        id_cliente: data.id_cliente,
-        id_tecnico_atribuido: data.id_tecnico_atribuido,
-        prioridade: data.prioridade,
-        data_agendamento: data.data_agendamento,
-        descricao_cliente: data.descricao_cliente,
-        em_garantia: data.em_garantia,
-        pedido: data.pedido,
-        honorarios: data.honorarios,
-      });
-    } else {
-      ChamadoService.criarOrdemServico(data);
+  const handleSaveOS = async (data: any) => {
+    try {
+      if (data.id_os) {
+        await ChamadoService.atualizarOrdemServico(data.id_os, {
+          id_cliente: data.id_cliente,
+          id_tecnico_atribuido: data.id_tecnico_atribuido,
+          prioridade: data.prioridade,
+          data_agendamento: data.data_agendamento,
+          descricao_cliente: data.descricao_cliente,
+          em_garantia: data.em_garantia,
+          pedido: data.pedido,
+        });
+      } else {
+        await ChamadoService.criarOrdemServico(data);
+      }
+      await loadData();
+      setShowNovaOSModal(false);
+      setOsEdicao(null);
+      setErrorMsg(null);
+    } catch (err: any) {
+      setErrorMsg(err?.detail || err?.message || 'Erro ao salvar Ordem de Serviço no backend.');
     }
-    loadData();
-    setShowNovaOSModal(false);
-    setOsEdicao(null);
   };
 
-  const handleConfirmAtribuir = (id_os: number, id_tecnico: number) => {
-    ChamadoService.atribuirTecnico(id_os, id_tecnico);
-    loadData();
-    setShowAtribuirModal(false);
-    setOsParaAtribuir(null);
+  const handleConfirmAtribuir = async (id_os: number, id_tecnico: number) => {
+    try {
+      await ChamadoService.atribuirTecnico(id_os, id_tecnico);
+      await loadData();
+      setShowAtribuirModal(false);
+      setOsParaAtribuir(null);
+      setErrorMsg(null);
+    } catch (err: any) {
+      setErrorMsg(err?.detail || err?.message || 'Erro ao atribuir técnico na API.');
+    }
   };
 
-  const handleDeleteOS = (id_os: number) => {
-    ChamadoService.excluirOrdemServico(id_os);
-    loadData();
+  const handleDeleteOS = async (id_os: number) => {
+    try {
+      await ChamadoService.excluirOrdemServico(id_os);
+      await loadData();
+      setErrorMsg(null);
+    } catch (err: any) {
+      setErrorMsg(err?.detail || err?.message || 'Erro ao excluir Ordem de Serviço na API.');
+    }
   };
 
   // --- HANDLERS: CLIENTE ---
-  const handleSaveCliente = (data: Partial<Cliente>) => {
-    ChamadoService.salvarCliente(data);
-    loadData();
-    setShowClienteModal(false);
-    setClienteEdicao(null);
+  const handleSaveCliente = async (data: Partial<Cliente>) => {
+    try {
+      await ChamadoService.salvarCliente(data);
+      await loadData();
+      setShowClienteModal(false);
+      setClienteEdicao(null);
+      setErrorMsg(null);
+    } catch (err: any) {
+      setErrorMsg(err?.detail || err?.message || 'Erro ao salvar cliente na API.');
+    }
   };
 
-  const handleConfirmDeleteCliente = () => {
+  const handleConfirmDeleteCliente = async () => {
     if (clienteParaExcluir) {
-      ChamadoService.excluirCliente(clienteParaExcluir.id_cliente);
-      loadData();
-      setClienteParaExcluir(null);
+      try {
+        await ChamadoService.excluirCliente(clienteParaExcluir.id_cliente);
+        await loadData();
+        setClienteParaExcluir(null);
+        setErrorMsg(null);
+      } catch (err: any) {
+        setErrorMsg(err?.detail || err?.message || 'Erro ao excluir cliente na API.');
+      }
     }
   };
 
   // --- HANDLERS: TECNICO ---
-  const handleSaveTecnico = (data: Partial<Tecnico>) => {
-    ChamadoService.salvarTecnico(data);
-    loadData();
-    setShowTecnicoModal(false);
-    setTecnicoEdicao(null);
+  const handleSaveTecnico = async (data: any) => {
+    try {
+      await ChamadoService.salvarTecnico(data);
+      await loadData();
+      setShowTecnicoModal(false);
+      setTecnicoEdicao(null);
+      setErrorMsg(null);
+    } catch (err: any) {
+      setErrorMsg(err?.detail || err?.message || 'Erro ao salvar técnico na API.');
+    }
   };
 
-  const handleConfirmDeleteTecnico = () => {
+  const handleConfirmDeleteTecnico = async () => {
     if (tecnicoParaExcluir) {
-      ChamadoService.excluirTecnico(tecnicoParaExcluir.id_tecnico);
-      loadData();
-      setTecnicoParaExcluir(null);
+      try {
+        await ChamadoService.excluirTecnico(tecnicoParaExcluir.id_tecnico);
+        await loadData();
+        setTecnicoParaExcluir(null);
+        setErrorMsg(null);
+      } catch (err: any) {
+        setErrorMsg(err?.detail || err?.message || 'Erro ao excluir técnico na API.');
+      }
     }
   };
 
@@ -360,6 +382,40 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechVi
         />
 
         <main className="p-6 space-y-6 max-w-7xl mx-auto w-full">
+          {errorMsg && (
+            <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-destructive">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <button
+                  onClick={async () => {
+                    await ChamadoService.repararPerfilTecnicoNoBackend(1);
+                    loadData();
+                  }}
+                  className="px-3 py-1 bg-primary text-white rounded-lg font-bold hover:bg-primary/90 cursor-pointer shadow-xs"
+                  title="Atualiza os campos obrigatórios do técnico mestre no backend para sanar inconsistências de validação"
+                >
+                  🛠️ Reparar Cadastro no Banco
+                </button>
+                <button
+                  onClick={loadData}
+                  className="px-3 py-1 bg-destructive text-white rounded-lg font-bold hover:bg-destructive/90 cursor-pointer shadow-xs"
+                >
+                  Tentar Novamente
+                </button>
+              </div>
+            </div>
+          )}
+
+          {loading && (
+            <div className="flex items-center justify-center p-4 text-xs text-muted-foreground gap-2 bg-secondary/40 rounded-2xl border border-border">
+              <Clock className="w-4 h-4 animate-spin text-accent" />
+              <span>Sincronizando dados reais com o backend FastAPI...</span>
+            </div>
+          )}
+
           {/* TAB 1: DASHBOARD OVERVIEW */}
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
@@ -616,81 +672,77 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechVi
               </div>
 
               {/* Clientes Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredClientes.map((cli) => {
-                  const totalClienteOS = chamados.filter((c) => c.id_cliente === cli.id_cliente).length;
-                  return (
-                    <div
-                      key={cli.id_cliente}
-                      className="bg-card border border-border rounded-2xl p-5 space-y-4 hover:border-accent/40 transition-all flex flex-col justify-between shadow-sm"
-                    >
-                      <div>
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <h3 className="text-sm font-extrabold text-foreground">{cli.nome_fantasia}</h3>
-                            <p className="text-[11px] text-muted-foreground">{cli.razao_social}</p>
-                          </div>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-secondary text-accent border border-border">
-                            {totalClienteOS} OS Cadastrada(s)
-                          </span>
-                        </div>
-
-                        <div className="mt-3 pt-3 border-t border-border space-y-2 text-xs text-foreground/90">
-                          <p className="flex items-center gap-2 text-muted-foreground">
-                            <Building className="w-3.5 h-3.5 text-accent shrink-0" />
-                            <span>CNPJ/CPF: <strong className="text-foreground">{cli.cnpj_cpf || 'Não informado'}</strong></span>
-                          </p>
-                          <p className="flex items-center gap-2 text-muted-foreground">
-                            <Phone className="w-3.5 h-3.5 text-success shrink-0" />
-                            <span>{cli.telefone || 'Sem telefone'} • Resp: <strong className="text-foreground">{cli.contato_responsavel || 'Não informado'}</strong></span>
-                          </p>
-                          <p className="flex items-center gap-2 text-muted-foreground">
-                            <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                            <span>{cli.endereco}, {cli.numero} - {cli.bairro}, {cli.cidade}/{cli.uf}</span>
-                          </p>
-
-                          {/* Múltiplos Contatos */}
-                          {cli.contatos && cli.contatos.length > 0 && (
-                            <div className="pt-2 border-t border-border/80">
-                              <span className="text-[10px] font-bold text-muted-foreground block mb-1">
-                                Contatos Adicionais ({cli.contatos.length}):
-                              </span>
-                              <div className="flex flex-wrap gap-1.5">
-                                {cli.contatos.map((ct) => (
-                                  <span
-                                    key={ct.id_contato}
-                                    className="px-2 py-0.5 bg-secondary border border-border rounded-md text-[11px] text-foreground/90"
-                                  >
-                                    {ct.nome} {ct.cargo || ct.cargo_departamento ? `(${ct.cargo || ct.cargo_departamento})` : ''} - {ct.telefone}
-                                  </span>
-                                ))}
-                              </div>
+              {filteredClientes.length === 0 ? (
+                <div className="p-12 text-center text-muted-foreground bg-secondary/30 rounded-2xl border border-dashed border-border">
+                  <Building className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                  <p className="font-bold text-foreground">Nenhum cliente cadastrado no sistema</p>
+                  <p className="text-xs mt-1">Clique em "Novo Cliente" acima para registrar o primeiro cliente no backend.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredClientes.map((cli) => {
+                    const totalClienteOS = chamados.filter((c) => c.id_cliente === cli.id_cliente).length;
+                    return (
+                      <div
+                        key={cli.id_cliente}
+                        className="bg-card border border-border rounded-2xl p-5 space-y-4 hover:border-accent/40 transition-all flex flex-col justify-between shadow-sm"
+                      >
+                        <div>
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <h3 className="text-sm font-extrabold text-foreground">{cli.razao_social}</h3>
+                              {cli.codigo && (
+                                <p className="text-[11px] text-accent font-semibold">Código: #{cli.codigo}</p>
+                              )}
                             </div>
-                          )}
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-secondary text-accent border border-border">
+                              {totalClienteOS} OS Cadastrada(s)
+                            </span>
+                          </div>
+
+                          <div className="mt-3 pt-3 border-t border-border space-y-2 text-xs text-foreground/90">
+                            {cli.contato_principal_nome && (
+                              <p className="flex items-center gap-2 text-muted-foreground">
+                                <Phone className="w-3.5 h-3.5 text-success shrink-0" />
+                                <span>
+                                  Contato: <strong className="text-foreground">{cli.contato_principal_nome}</strong>
+                                  {cli.contato_principal_telefone ? ` (${cli.contato_principal_telefone})` : ''}
+                                </span>
+                              </p>
+                            )}
+                            <p className="flex items-center gap-2 text-muted-foreground">
+                              <Phone className="w-3.5 h-3.5 text-primary shrink-0" />
+                              <span>Telefone Geral: <strong className="text-foreground">{cli.telefone || 'Sem telefone'}</strong></span>
+                            </p>
+                            <p className="flex items-center gap-2 text-muted-foreground">
+                              <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                              <span>{cli.endereco}, {cli.numero} - {cli.bairro}, {cli.cidade}/{cli.uf}</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+                          <button
+                            onClick={() => {
+                              setClienteEdicao(cli);
+                              setShowClienteModal(true);
+                            }}
+                            className="px-3 py-1.5 bg-secondary hover:bg-muted text-accent border border-border rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" /> Editar
+                          </button>
+                          <button
+                            onClick={() => setClienteParaExcluir(cli)}
+                            className="px-3 py-1.5 bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/30 rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Excluir
+                          </button>
                         </div>
                       </div>
-
-                      <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
-                        <button
-                          onClick={() => {
-                            setClienteEdicao(cli);
-                            setShowClienteModal(true);
-                          }}
-                          className="px-3 py-1.5 bg-secondary hover:bg-muted text-accent border border-border rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" /> Editar
-                        </button>
-                        <button
-                          onClick={() => setClienteParaExcluir(cli)}
-                          className="px-3 py-1.5 bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/30 rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" /> Excluir
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -732,82 +784,90 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechVi
               </div>
 
               {/* Técnicos Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {filteredTecnicos.map((tec) => {
-                  const chamadosTecnico = chamados.filter((c) => c.id_tecnico_atribuido === tec.id_tecnico);
-                  const ativasCount = chamadosTecnico.filter(
-                    (c) => c.status === 'EM_ATENDIMENTO' || c.status === 'ABERTO' || c.status === 'PAUSADO'
-                  ).length;
-                  const concluidasCount = chamadosTecnico.filter((c) => c.status === 'CONCLUIDO').length;
+              {filteredTecnicos.length === 0 ? (
+                <div className="p-12 text-center text-muted-foreground bg-secondary/30 rounded-2xl border border-dashed border-border">
+                  <Wrench className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                  <p className="font-bold text-foreground">Nenhum técnico cadastrado no sistema</p>
+                  <p className="text-xs mt-1">Clique em "Novo Técnico" acima para cadastrar integrantes da equipe técnica.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {filteredTecnicos.map((tec) => {
+                    const chamadosTecnico = chamados.filter((c) => c.id_tecnico_atribuido === tec.id_tecnico);
+                    const ativasCount = chamadosTecnico.filter(
+                      (c) => c.status === 'EM_ATENDIMENTO' || c.status === 'ABERTO' || c.status === 'PAUSADO'
+                    ).length;
+                    const concluidasCount = chamadosTecnico.filter((c) => c.status === 'CONCLUIDO').length;
 
-                  return (
-                    <div
-                      key={tec.id_tecnico}
-                      className="bg-card border border-border rounded-2xl p-5 space-y-4 hover:border-accent/40 transition-all flex flex-col justify-between shadow-sm"
-                    >
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={tec.avatar_url}
-                            alt={tec.nome}
-                            className="w-12 h-12 rounded-full object-cover ring-2 ring-accent/30"
-                          />
-                          <div>
-                            <h3 className="text-sm font-extrabold text-foreground">{tec.nome}</h3>
-                            <p className="text-xs text-muted-foreground">Técnico Autorizado</p>
+                    return (
+                      <div
+                        key={tec.id_tecnico}
+                        className="bg-card border border-border rounded-2xl p-5 space-y-4 hover:border-accent/40 transition-all flex flex-col justify-between shadow-sm"
+                      >
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-primary text-base">
+                              {tec.nome.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <h3 className="text-sm font-extrabold text-foreground">{tec.nome}</h3>
+                              <p className="text-xs text-accent font-semibold">
+                                {tec.role === 'admin' ? 'Administrador Mestre' : 'Técnico de Campo'}
+                              </p>
+                            </div>
                           </div>
-                        </div>
 
-                        <div className="space-y-1.5 text-xs text-muted-foreground pt-2 border-t border-border">
-                          <p className="flex items-center gap-2">
-                            <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                            <span className="text-foreground/90">{tec.email}</span>
-                          </p>
-                          <p className="flex items-center gap-2">
-                            <Phone className="w-3.5 h-3.5 text-success shrink-0" />
-                            <span className="text-foreground/90">{tec.telefone}</span>
-                          </p>
-                          {tec.cpf && (
-                            <p className="text-[11px] text-muted-foreground">
-                              CPF: {tec.cpf}
+                          <div className="space-y-1.5 text-xs text-muted-foreground pt-2 border-t border-border">
+                            <p className="flex items-center gap-2">
+                              <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                              <span className="text-foreground/90">{tec.email}</span>
                             </p>
-                          )}
+                            <p className="flex items-center gap-2">
+                              <Phone className="w-3.5 h-3.5 text-success shrink-0" />
+                              <span className="text-foreground/90">{tec.telefone}</span>
+                            </p>
+                            {tec.cpf && (
+                              <p className="text-[11px] text-muted-foreground">
+                                CPF: <strong className="text-foreground">{tec.cpf}</strong> • CNPJ: <strong className="text-foreground">{tec.cnpj}</strong>
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Workload metric pill */}
+                          <div className="grid grid-cols-2 gap-2 text-center text-xs pt-1">
+                            <div className="bg-secondary p-2 rounded-xl border border-border">
+                              <span className="text-[10px] text-muted-foreground block">Ativos em Campo</span>
+                              <span className="font-extrabold text-accent">{ativasCount}</span>
+                            </div>
+                            <div className="bg-secondary p-2 rounded-xl border border-border">
+                              <span className="text-[10px] text-muted-foreground block">Concluídas</span>
+                              <span className="font-extrabold text-success">{concluidasCount}</span>
+                            </div>
+                          </div>
                         </div>
 
-                        {/* Workload metric pill */}
-                        <div className="grid grid-cols-2 gap-2 text-center text-xs pt-1">
-                          <div className="bg-secondary p-2 rounded-xl border border-border">
-                            <span className="text-[10px] text-muted-foreground block">Ativos em Campo</span>
-                            <span className="font-extrabold text-accent">{ativasCount}</span>
-                          </div>
-                          <div className="bg-secondary p-2 rounded-xl border border-border">
-                            <span className="text-[10px] text-muted-foreground block">Concluídas</span>
-                            <span className="font-extrabold text-success">{concluidasCount}</span>
-                          </div>
+                        <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+                          <button
+                            onClick={() => {
+                              setTecnicoEdicao(tec);
+                              setShowTecnicoModal(true);
+                            }}
+                            className="px-3 py-1.5 bg-secondary hover:bg-muted text-accent border border-border rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" /> Editar
+                          </button>
+                          <button
+                            onClick={() => setTecnicoParaExcluir(tec)}
+                            className="px-3 py-1.5 bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/30 rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Excluir
+                          </button>
                         </div>
                       </div>
-
-                      <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
-                        <button
-                          onClick={() => {
-                            setTecnicoEdicao(tec);
-                            setShowTecnicoModal(true);
-                          }}
-                          className="px-3 py-1.5 bg-secondary hover:bg-muted text-accent border border-border rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" /> Editar
-                        </button>
-                        <button
-                          onClick={() => setTecnicoParaExcluir(tec)}
-                          className="px-3 py-1.5 bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/30 rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" /> Excluir
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </main>

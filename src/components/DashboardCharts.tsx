@@ -38,31 +38,33 @@ export const DashboardCharts: React.FC<Props> = ({
     }
   };
 
+  const normalize = (s: string) => String(s || '').toUpperCase().replace(/\s+/g, '_');
+
   // Filter chamados specifically for the charts if a status is selected
   const chartChamados = activeStatus === 'TODOS'
     ? chamados
-    : chamados.filter((c) => c.status === activeStatus);
+    : chamados.filter((c) => normalize(c.status) === normalize(activeStatus));
 
   // Calculate status counts for the distribution pie chart
-  const abertos = (activeStatus === 'TODOS' || activeStatus === 'ABERTO')
-    ? chamados.filter((c) => c.status === 'ABERTO').length
+  const abertos = (activeStatus === 'TODOS' || normalize(activeStatus) === 'ABERTO')
+    ? chamados.filter((c) => normalize(c.status) === 'ABERTO' || normalize(c.status) === 'AGENDADO').length
     : 0;
-  const emAtendimento = (activeStatus === 'TODOS' || activeStatus === 'EM_ATENDIMENTO')
-    ? chamados.filter((c) => c.status === 'EM_ATENDIMENTO').length
+  const emAtendimento = (activeStatus === 'TODOS' || normalize(activeStatus) === 'EM_ATENDIMENTO')
+    ? chamados.filter((c) => normalize(c.status) === 'EM_ATENDIMENTO').length
     : 0;
-  const pausados = (activeStatus === 'TODOS' || activeStatus === 'PAUSADO')
-    ? chamados.filter((c) => c.status === 'PAUSADO').length
+  const pausados = (activeStatus === 'TODOS' || normalize(activeStatus) === 'PAUSADO')
+    ? chamados.filter((c) => normalize(c.status) === 'PAUSADO').length
     : 0;
-  const concluidos = (activeStatus === 'TODOS' || activeStatus === 'CONCLUIDO')
-    ? chamados.filter((c) => c.status === 'CONCLUIDO').length
+  const concluidos = (activeStatus === 'TODOS' || normalize(activeStatus) === 'CONCLUIDO' || normalize(activeStatus) === 'FINALIZADO')
+    ? chamados.filter((c) => normalize(c.status) === 'CONCLUIDO' || normalize(c.status) === 'FINALIZADO').length
     : 0;
-  const cancelados = (activeStatus === 'TODOS' || activeStatus === 'CANCELADO')
-    ? chamados.filter((c) => c.status === 'CANCELADO').length
+  const cancelados = (activeStatus === 'TODOS' || normalize(activeStatus) === 'CANCELADO')
+    ? chamados.filter((c) => normalize(c.status) === 'CANCELADO' || c.is_cancelled).length
     : 0;
 
   // FAST brand chart colors: Corporate Blue, Light Blue, Amber, Green, Red
   const statusData = [
-    { name: 'Aberto', value: abertos, color: '#004F9F' },
+    { name: 'Aberto / Agendado', value: abertos, color: '#004F9F' },
     { name: 'Em Atendimento', value: emAtendimento, color: '#2563EB' },
     { name: 'Pausado', value: pausados, color: '#D97706' },
     { name: 'Concluído', value: concluidos, color: '#16A34A' },
@@ -71,15 +73,18 @@ export const DashboardCharts: React.FC<Props> = ({
 
   // Calculate Technician workload based on filtered chartChamados
   const tecnicoWorkloadData = tecnicos.map((tec) => {
-    const ativas = chartChamados.filter(
-      (c) => c.id_tecnico_atribuido === tec.id_tecnico && (c.status === 'EM_ATENDIMENTO' || c.status === 'ABERTO' || c.status === 'PAUSADO')
-    ).length;
-    const concluidas = chartChamados.filter(
-      (c) => c.id_tecnico_atribuido === tec.id_tecnico && c.status === 'CONCLUIDO'
-    ).length;
-    const canceladas = chartChamados.filter(
-      (c) => c.id_tecnico_atribuido === tec.id_tecnico && c.status === 'CANCELADO'
-    ).length;
+    const ativas = chartChamados.filter((c) => {
+      const st = normalize(c.status);
+      return c.id_tecnico_atribuido === tec.id_tecnico && (st === 'EM_ATENDIMENTO' || st === 'ABERTO' || st === 'AGENDADO' || st === 'PAUSADO');
+    }).length;
+    const concluidas = chartChamados.filter((c) => {
+      const st = normalize(c.status);
+      return c.id_tecnico_atribuido === tec.id_tecnico && (st === 'CONCLUIDO' || st === 'FINALIZADO');
+    }).length;
+    const canceladas = chartChamados.filter((c) => {
+      const st = normalize(c.status);
+      return c.id_tecnico_atribuido === tec.id_tecnico && (st === 'CANCELADO' || c.is_cancelled);
+    }).length;
 
     return {
       nome: tec.nome.split(' ')[0] + ' ' + (tec.nome.split(' ')[1]?.[0] || '') + '.',

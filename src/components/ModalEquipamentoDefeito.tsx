@@ -1,18 +1,55 @@
 import React, { useState } from 'react';
-import { ServicoEquipamento, FotoServico, MaterialUtilizado, DefeitoRelatado } from '../types';
-import { Cpu, Plus, Trash2, Camera, Check, X, Wrench, PackagePlus } from 'lucide-react';
+import { ServicoEquipamento, MaterialUtilizado } from '../types';
+import { Cpu, Plus, Trash2, Camera, Check, X, PackagePlus, Upload } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
   equipamentoExistente?: ServicoEquipamento | null;
   onClose: () => void;
-  onSave: (equipamento: ServicoEquipamento) => void;
+  onSave: (
+    equipamento: ServicoEquipamento,
+    novasFotos?: { tipo: 'defeito' | 'conserto'; file: File }[]
+  ) => void;
 }
 
-const SAMPLE_DEFECT_PHOTOS = [
-  'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=600&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1581092335397-9583fe92d232?w=600&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?w=600&auto=format&fit=crop&q=80',
+const DEFEITOS_PRINCIPAIS_OPCOES = ['Refrigeração', 'Iluminação', 'Estrutura', 'Outros'];
+
+const SUB_DEFEITOS_REFRIGERACAO = ['Compressor', 'Vazamento', 'Outros (Refrigeração)'];
+const SUB_DEFEITOS_COMPRESSOR = [
+  'Queimado',
+  'Em Massa',
+  'Em Curto',
+  'Corrente Alta',
+  'Não Parte',
+  'Sem Compressão',
+  'Travado',
+  'Com Barulho',
+  'Não Succiona',
+  'Desarmado',
+];
+const SUB_DEFEITOS_VAZAMENTO = ['Nº Ponto', 'Não Localizado'];
+const SUB_DEFEITOS_OUTROS = [
+  'Filtro Entupido',
+  'Capilar Obstruído',
+  'Micromotor Queimado',
+  'Micromotor Travado',
+  'Controlador Queimado',
+  'Regulagem Parâmetros',
+];
+const SUB_DEFEITOS_ILUMINACAO = ['Lâmpada Queimada', 'Sem Alimentação', 'Em Curto'];
+const SUB_DEFEITOS_ESTRUTURA = [
+  '01 - Perfil Curvo Vidro',
+  '02 - Perfil Suporte Iluminação',
+  '03 - Lente Calha Iluminação',
+  '04 - Perfil Vedação',
+  '05 - Perfil Porta Etiqueta',
+  '06 - Puxador',
+  '07 - Porta Parachoque',
+  '08 - Canto 90°',
+  '09 - Acrílico Carel',
+  '10 - Perfil Frontal',
+  '11 - Parachoque Frontal',
+  '12 - Parachoque Lateral',
 ];
 
 export const ModalEquipamentoDefeito: React.FC<Props> = ({
@@ -22,107 +59,120 @@ export const ModalEquipamentoDefeito: React.FC<Props> = ({
   onSave,
 }) => {
   const [nome, setNome] = useState(equipamentoExistente?.nome_equipamento || '');
-  const [modelo, setModelo] = useState(equipamentoExistente?.modelo || '');
-  const [numeroSerie, setNumeroSerie] = useState(equipamentoExistente?.numero_serie || '');
-  const [statusServico, setStatusServico] = useState<ServicoEquipamento['status_servico']>(
-    equipamentoExistente?.status_servico || 'Sanado'
+  const [numeroSerie, setNumeroSerie] = useState(
+    equipamentoExistente?.numero_serie_atendido || equipamentoExistente?.numero_serie || ''
+  );
+  const [defeitosPrincipais, setDefeitosPrincipais] = useState<string[]>(
+    equipamentoExistente?.defeitos_principais || ['Refrigeração']
+  );
+  const [defeitoOutrosDesc, setDefeitoOutrosDesc] = useState(
+    equipamentoExistente?.defeito_outros_descricao || ''
   );
 
-  const [defeitos, setDefeitos] = useState<DefeitoRelatado[]>(
-    equipamentoExistente?.defeitos || [
-      { id_defeito: 'd_1', descricao: 'Ruído excessivo no ventilador do condensador', solucionado: true },
-    ]
+  // Sub-defeitos
+  const [subRef, setSubRef] = useState<string[]>(equipamentoExistente?.sub_defeitos_refrigeracao || []);
+  const [subComp, setSubComp] = useState<string[]>(equipamentoExistente?.sub_defeitos_compressor || []);
+  const [subVaz, setSubVaz] = useState<string[]>(equipamentoExistente?.sub_defeitos_vazamento || []);
+  const [vazDesc, setVazDesc] = useState(equipamentoExistente?.vazamento_ponto_descricao || '');
+  const [subOutros, setSubOutros] = useState<string[]>(equipamentoExistente?.sub_defeitos_outros || []);
+  const [subIlum, setSubIlum] = useState<string[]>(equipamentoExistente?.sub_defeitos_iluminacao || []);
+  const [subEstrut, setSubEstrut] = useState<string[]>(equipamentoExistente?.sub_defeitos_estrutura || []);
+
+  // Materiais
+  const [materiais, setMateriais] = useState<MaterialUtilizado[]>(
+    equipamentoExistente?.materiais_utilizados || equipamentoExistente?.materiais || []
   );
-
-  const [novoDefeitoDesc, setNovoDefeitoDesc] = useState('');
-
-  const [fotos, setFotos] = useState<FotoServico[]>(equipamentoExistente?.fotos || []);
-  const [materiais, setMateriais] = useState<MaterialUtilizado[]>(equipamentoExistente?.materiais || []);
-
-  const [novoMatDesc, setNovoMatDesc] = useState('');
+  const [novoMatNome, setNovoMatNome] = useState('');
   const [novoMatQtd, setNovoMatQtd] = useState(1);
-  const [novoMatUn, setNovoMatUn] = useState('UN');
-  const [novoMatPreco, setNovoMatPreco] = useState(0);
+  const [novoMatValor, setNovoMatValor] = useState(0);
 
-  const [observacoes, setObservacoes] = useState(equipamentoExistente?.observacoes_tecnicas || '');
+  // Fotos
+  const [novasFotos, setNovasFotos] = useState<{ tipo: 'defeito' | 'conserto'; file: File; preview: string }[]>([]);
 
   if (!isOpen) return null;
 
-  const handleAddDefeito = () => {
-    if (!novoDefeitoDesc.trim()) return;
-    setDefeitos([
-      ...defeitos,
-      { id_defeito: 'd_' + Date.now(), descricao: novoDefeitoDesc.trim(), solucionado: true },
-    ]);
-    setNovoDefeitoDesc('');
+  const toggleArrayItem = (list: string[], item: string, setter: (val: string[]) => void) => {
+    if (list.includes(item)) {
+      setter(list.filter((x) => x !== item));
+    } else {
+      setter([...list, item]);
+    }
   };
 
-  const handleToggleDefeito = (id: string | number) => {
-    setDefeitos(
-      defeitos.map((d) => (d.id_defeito === id ? { ...d, solucionado: !d.solucionado } : d))
-    );
+  const handleFotoUpload = (tipo: 'defeito' | 'conserto', e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setNovasFotos([
+        ...novasFotos,
+        { tipo, file, preview: URL.createObjectURL(file) },
+      ]);
+    }
   };
 
-  const handleRemoveDefeito = (id: string | number) => {
-    setDefeitos(defeitos.filter((d) => d.id_defeito !== id));
-  };
-
-  const handleAddFoto = (tipo: 'DEFEITO' | 'CONSERTO') => {
-    const randomUrl = SAMPLE_DEFECT_PHOTOS[Math.floor(Math.random() * SAMPLE_DEFECT_PHOTOS.length)];
-    const novaFoto: FotoServico = {
-      id_foto: 'f_' + Date.now(),
-      tipo,
-      url: randomUrl,
-      descricao: tipo === 'DEFEITO' ? 'Registro de anomalia encontrada' : 'Registro após reparo executado',
-      data_hora: new Date().toLocaleString('pt-BR'),
-    };
-    setFotos([...fotos, novaFoto]);
-  };
-
-  const handleRemoveFoto = (id: string | number) => {
-    setFotos(fotos.filter((f) => f.id_foto !== id));
+  const handleRemoveFoto = (index: number) => {
+    setNovasFotos(novasFotos.filter((_, i) => i !== index));
   };
 
   const handleAddMaterial = () => {
-    if (!novoMatDesc.trim()) return;
+    if (!novoMatNome.trim()) return;
     setMateriais([
       ...materiais,
       {
-        descricao: novoMatDesc.trim(),
-        quantidade: Number(novoMatQtd),
-        unidade: novoMatUn,
-        valor_unitario: Number(novoMatPreco),
+        nome: novoMatNome.trim(),
+        descricao: novoMatNome.trim(),
+        quantidade: Number(novoMatQtd) || 1,
+        valor: Number(novoMatValor) || 0,
+        valor_unitario: Number(novoMatValor) || 0,
       },
     ]);
-    setNovoMatDesc('');
+    setNovoMatNome('');
     setNovoMatQtd(1);
-    setNovoMatPreco(0);
+    setNovoMatValor(0);
   };
 
   const handleRemoveMaterial = (idx: number) => {
     setMateriais(materiais.filter((_, i) => i !== idx));
   };
 
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nome.trim()) return;
+    if (!nome.trim() || !numeroSerie.trim()) {
+      setErrorMsg('Por favor, informe o Nome do Equipamento e o Número de Série.');
+      return;
+    }
+    setErrorMsg(null);
 
-    onSave({
-      id_servico_equipamento: equipamentoExistente?.id_servico_equipamento || Date.now(),
-      nome_equipamento: nome,
-      modelo: modelo || 'N/A',
-      numero_serie: numeroSerie || 'S/N',
-      status_servico: statusServico,
-      defeitos,
-      fotos,
+    const payload: ServicoEquipamento = {
+      id_servico: equipamentoExistente?.id_servico,
+      id_servico_equipamento: equipamentoExistente?.id_servico_equipamento,
+      nome_equipamento: nome.trim(),
+      numero_serie_atendido: numeroSerie.trim(),
+      numero_serie: numeroSerie.trim(),
+      defeitos_principais: defeitosPrincipais,
+      defeito_outros_descricao: defeitoOutrosDesc.trim() || undefined,
+      sub_defeitos_refrigeracao: subRef,
+      sub_defeitos_compressor: subComp,
+      sub_defeitos_vazamento: subVaz,
+      vazamento_ponto_descricao: vazDesc.trim() || undefined,
+      sub_defeitos_outros: subOutros,
+      sub_defeitos_iluminacao: subIlum,
+      sub_defeitos_estrutura: subEstrut,
+      materiais_utilizados: materiais,
       materiais,
-      observacoes_tecnicas: observacoes,
-    });
+      status_servico: 'Pendente',
+    };
+
+    onSave(
+      payload,
+      novasFotos.map((f) => ({ tipo: f.tipo, file: f.file }))
+    );
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fade-in overflow-y-auto">
-      <div className="bg-card border border-border w-full max-w-2xl rounded-2xl p-6 shadow-2xl relative my-8 max-h-[90vh] overflow-y-auto text-foreground font-sans">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fade-in overflow-y-auto font-sans">
+      <div className="bg-card border border-border w-full max-w-2xl rounded-2xl p-6 shadow-2xl relative my-8 max-h-[90vh] overflow-y-auto text-foreground">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-secondary cursor-pointer"
@@ -136,149 +186,265 @@ export const ModalEquipamentoDefeito: React.FC<Props> = ({
           </div>
           <div>
             <h2 className="text-lg font-bold text-foreground">
-              {equipamentoExistente ? 'Editar Equipamento & Diagnóstico' : 'Novo Equipamento Atendido'}
+              {equipamentoExistente ? 'Editar Equipamento & Defeitos' : 'Novo Equipamento Atendido'}
             </h2>
-            <p className="text-xs text-muted-foreground">Registre dados de fabricação, defeitos, peças e fotos do serviço</p>
+            <p className="text-xs text-muted-foreground">
+              Cadastre o equipamento, defeitos categorizados, fotos e peças conforme o backend
+            </p>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Equipamento Specs */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="sm:col-span-3">
-              <label className="block text-xs font-semibold text-foreground mb-1">Nome do Equipamento *</label>
+        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          {errorMsg && (
+            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-600 dark:text-red-400 font-semibold">
+              {errorMsg}
+            </div>
+          )}
+
+          {/* Identificação Básica */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-foreground mb-1">
+                Nome do Equipamento *
+              </label>
               <input
                 type="text"
                 required
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
-                placeholder="Ex: Gôndola Refrigerada Laticínios 3M"
+                placeholder="Ex: Gôndola Refrigerada Laticínios"
                 className="w-full bg-secondary border border-border rounded-xl p-2.5 text-xs text-foreground focus:border-accent focus:outline-none"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1">Modelo</label>
+              <label className="block text-xs font-semibold text-foreground mb-1">
+                Número de Série *
+              </label>
               <input
                 type="text"
-                value={modelo}
-                onChange={(e) => setModelo(e.target.value)}
-                placeholder="Ex: FAST-COOL-3000"
-                className="w-full bg-secondary border border-border rounded-xl p-2.5 text-xs text-foreground focus:border-accent focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-foreground mb-1">Nº de Série</label>
-              <input
-                type="text"
+                required
                 value={numeroSerie}
                 onChange={(e) => setNumeroSerie(e.target.value)}
-                placeholder="Ex: SN-2024-998"
+                placeholder="Ex: SN-FREEZER-2025"
                 className="w-full bg-secondary border border-border rounded-xl p-2.5 text-xs text-foreground focus:border-accent focus:outline-none"
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-foreground mb-1">Status Final</label>
-              <select
-                value={statusServico}
-                onChange={(e) => setStatusServico(e.target.value as any)}
-                className="w-full bg-secondary border border-border rounded-xl p-2.5 text-xs text-foreground focus:border-accent focus:outline-none"
-              >
-                <option value="Sanado">Sanado (Resolvido)</option>
-                <option value="Pendente">Pendente (Peças/Retorno)</option>
-                <option value="Substituído">Substituído Novo</option>
-                <option value="Retirado para Oficina">Retirado para Oficina</option>
-              </select>
-            </div>
           </div>
 
-          {/* Defect Checklist */}
+          {/* Categorias Principais de Defeito */}
           <div className="border-t border-border pt-3">
-            <label className="block text-xs font-semibold text-foreground mb-2">Defeitos / Falhas Relatadas</label>
-            <div className="flex gap-2 mb-2">
-              <input
-                type="text"
-                value={novoDefeitoDesc}
-                onChange={(e) => setNovoDefeitoDesc(e.target.value)}
-                placeholder="Descreva o defeito encontrado..."
-                className="flex-1 bg-secondary border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:border-accent focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={handleAddDefeito}
-                className="px-3 py-2 bg-secondary hover:bg-muted text-xs font-semibold text-accent rounded-xl flex items-center gap-1 cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" /> Adicionar
-              </button>
-            </div>
-
-            <div className="space-y-1.5">
-              {defeitos.map((d) => (
-                <div key={d.id_defeito} className="flex items-center justify-between bg-secondary/50 p-2.5 rounded-xl border border-border text-xs">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={d.solucionado}
-                      onChange={() => handleToggleDefeito(d.id_defeito)}
-                      className="rounded border-border text-accent focus:ring-0"
-                    />
-                    <span className={d.solucionado ? 'text-muted-foreground line-through opacity-70' : 'text-foreground font-semibold'}>
-                      {d.descricao}
-                    </span>
-                  </div>
+            <label className="block text-xs font-semibold text-foreground mb-1.5">
+              Categorias Principais de Defeito *
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {DEFEITOS_PRINCIPAIS_OPCOES.map((opcao) => {
+                const ativo = defeitosPrincipais.includes(opcao);
+                return (
                   <button
+                    key={opcao}
                     type="button"
-                    onClick={() => handleRemoveDefeito(d.id_defeito)}
-                    className="text-muted-foreground hover:text-destructive p-1 cursor-pointer"
+                    onClick={() => toggleArrayItem(defeitosPrincipais, opcao, setDefeitosPrincipais)}
+                    className={`px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                      ativo
+                        ? 'bg-accent text-white border-accent'
+                        : 'bg-secondary text-muted-foreground border-border hover:text-foreground'
+                    }`}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    {opcao}
                   </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
-          {/* Photos (Defeito vs Conserto) */}
+          {/* Sub-defeitos: Refrigeração */}
+          {defeitosPrincipais.includes('Refrigeração') && (
+            <div className="p-3 bg-secondary/40 rounded-xl border border-border space-y-2">
+              <span className="font-bold text-accent text-xs block">Sub-defeitos de Refrigeração:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {SUB_DEFEITOS_REFRIGERACAO.map((sub) => (
+                  <button
+                    key={sub}
+                    type="button"
+                    onClick={() => toggleArrayItem(subRef, sub, setSubRef)}
+                    className={`px-2.5 py-1 rounded-lg border text-[11px] cursor-pointer ${
+                      subRef.includes(sub)
+                        ? 'bg-primary text-white border-primary'
+                        : 'bg-card text-muted-foreground border-border'
+                    }`}
+                  >
+                    {sub}
+                  </button>
+                ))}
+              </div>
+
+              {subRef.includes('Compressor') && (
+                <div className="pt-2">
+                  <span className="font-semibold text-muted-foreground text-[10px] block mb-1">
+                    Defeitos do Compressor:
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {SUB_DEFEITOS_COMPRESSOR.map((item) => (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => toggleArrayItem(subComp, item, setSubComp)}
+                        className={`px-2 py-0.5 rounded text-[10px] border cursor-pointer ${
+                          subComp.includes(item)
+                            ? 'bg-amber-600 text-white border-amber-600'
+                            : 'bg-card text-muted-foreground border-border'
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {subRef.includes('Vazamento') && (
+                <div className="pt-2 space-y-1">
+                  <span className="font-semibold text-muted-foreground text-[10px] block">
+                    Defeitos de Vazamento:
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {SUB_DEFEITOS_VAZAMENTO.map((item) => (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => toggleArrayItem(subVaz, item, setSubVaz)}
+                        className={`px-2 py-0.5 rounded text-[10px] border cursor-pointer ${
+                          subVaz.includes(item)
+                            ? 'bg-amber-600 text-white border-amber-600'
+                            : 'bg-card text-muted-foreground border-border'
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Descrição do ponto de vazamento..."
+                    value={vazDesc}
+                    onChange={(e) => setVazDesc(e.target.value)}
+                    className="w-full bg-card border border-border rounded-lg p-2 text-xs text-foreground focus:border-accent focus:outline-none mt-1"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Sub-defeitos: Iluminação */}
+          {defeitosPrincipais.includes('Iluminação') && (
+            <div className="p-3 bg-secondary/40 rounded-xl border border-border space-y-2">
+              <span className="font-bold text-accent text-xs block">Defeitos de Iluminação:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {SUB_DEFEITOS_ILUMINACAO.map((sub) => (
+                  <button
+                    key={sub}
+                    type="button"
+                    onClick={() => toggleArrayItem(subIlum, sub, setSubIlum)}
+                    className={`px-2.5 py-1 rounded-lg border text-[11px] cursor-pointer ${
+                      subIlum.includes(sub)
+                        ? 'bg-primary text-white border-primary'
+                        : 'bg-card text-muted-foreground border-border'
+                    }`}
+                  >
+                    {sub}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Sub-defeitos: Estrutura */}
+          {defeitosPrincipais.includes('Estrutura') && (
+            <div className="p-3 bg-secondary/40 rounded-xl border border-border space-y-2">
+              <span className="font-bold text-accent text-xs block">Defeitos de Estrutura:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {SUB_DEFEITOS_ESTRUTURA.map((sub) => (
+                  <button
+                    key={sub}
+                    type="button"
+                    onClick={() => toggleArrayItem(subEstrut, sub, setSubEstrut)}
+                    className={`px-2.5 py-1 rounded-lg border text-[11px] cursor-pointer ${
+                      subEstrut.includes(sub)
+                        ? 'bg-primary text-white border-primary'
+                        : 'bg-card text-muted-foreground border-border'
+                    }`}
+                  >
+                    {sub}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Outros Defeitos Descrição */}
+          {defeitosPrincipais.includes('Outros') && (
+            <div>
+              <label className="block text-xs font-semibold text-foreground mb-1">
+                Descrição de Outros Defeitos
+              </label>
+              <textarea
+                rows={2}
+                value={defeitoOutrosDesc}
+                onChange={(e) => setDefeitoOutrosDesc(e.target.value)}
+                placeholder="Detalhes adicionais de anomalias encontradas..."
+                className="w-full bg-secondary border border-border rounded-xl p-2.5 text-xs text-foreground focus:border-accent focus:outline-none"
+              />
+            </div>
+          )}
+
+          {/* Registro Fotográfico Real */}
           <div className="border-t border-border pt-3">
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-semibold text-foreground">Registro Fotográfico</label>
+              <label className="text-xs font-semibold text-foreground">Fotos (Upload Real)</label>
               <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleAddFoto('DEFEITO')}
-                  className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/30 text-amber-600 hover:bg-amber-500/20 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer"
-                >
-                  <Camera className="w-3.5 h-3.5" /> Foto Defeito
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAddFoto('CONSERTO')}
-                  className="px-2.5 py-1 bg-success/10 border border-success/30 text-success hover:bg-success/20 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer"
-                >
-                  <Camera className="w-3.5 h-3.5" /> Foto Conserto
-                </button>
+                <label className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/30 text-amber-600 hover:bg-amber-500/20 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer">
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>+ Foto Defeito</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleFotoUpload('defeito', e)}
+                    className="hidden"
+                  />
+                </label>
+                <label className="px-2.5 py-1 bg-success/10 border border-success/30 text-success hover:bg-success/20 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer">
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>+ Foto Conserto</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleFotoUpload('conserto', e)}
+                    className="hidden"
+                  />
+                </label>
               </div>
             </div>
 
-            {fotos.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground italic bg-secondary/50 p-3 rounded-xl border border-dashed border-border text-center">
-                Nenhuma foto registrada para este equipamento ainda. Clique acima para simular foto de defeito ou reparo.
+            {novasFotos.length === 0 ? (
+              <p className="text-[11px] text-muted-foreground italic bg-secondary/50 p-2.5 rounded-xl border border-dashed border-border text-center">
+                Nenhuma nova foto anexada. Use os botões acima para selecionar imagens reais (mín. 720p).
               </p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {fotos.map((f) => (
-                  <div key={f.id_foto} className="relative group bg-secondary rounded-xl overflow-hidden border border-border">
-                    <img src={f.url} alt="Serviço" className="w-full h-24 object-cover" />
+                {novasFotos.map((f, i) => (
+                  <div key={i} className="relative group bg-secondary rounded-xl overflow-hidden border border-border">
+                    <img src={f.preview} alt={f.tipo} className="w-full h-20 object-cover" />
                     <span
                       className={`absolute top-1 left-1 text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                        f.tipo === 'DEFEITO' ? 'bg-amber-500 text-white' : 'bg-success text-white'
+                        f.tipo === 'defeito' ? 'bg-amber-500 text-white' : 'bg-success text-white'
                       }`}
                     >
-                      {f.tipo}
+                      {f.tipo.toUpperCase()}
                     </span>
                     <button
                       type="button"
-                      onClick={() => handleRemoveFoto(f.id_foto)}
-                      className="absolute top-1 right-1 bg-black/60 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                      onClick={() => handleRemoveFoto(i)}
+                      className="absolute top-1 right-1 bg-black/60 text-white p-1 rounded-full cursor-pointer"
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
@@ -288,19 +454,20 @@ export const ModalEquipamentoDefeito: React.FC<Props> = ({
             )}
           </div>
 
-          {/* Materials & Parts Used */}
+          {/* Peças e Materiais Utilizados */}
           <div className="border-t border-border pt-3">
             <label className="block text-xs font-semibold text-foreground mb-2">Peças e Materiais Utilizados</label>
             <div className="grid grid-cols-12 gap-2 mb-2">
               <input
                 type="text"
-                placeholder="Descrição do material..."
-                value={novoMatDesc}
-                onChange={(e) => setNovoMatDesc(e.target.value)}
+                placeholder="Nome da peça..."
+                value={novoMatNome}
+                onChange={(e) => setNovoMatNome(e.target.value)}
                 className="col-span-6 bg-secondary border border-border rounded-xl px-2.5 py-1.5 text-xs text-foreground focus:border-accent focus:outline-none"
               />
               <input
                 type="number"
+                min={1}
                 placeholder="Qtd"
                 value={novoMatQtd}
                 onChange={(e) => setNovoMatQtd(Number(e.target.value))}
@@ -308,9 +475,11 @@ export const ModalEquipamentoDefeito: React.FC<Props> = ({
               />
               <input
                 type="number"
-                placeholder="R$ Valor"
-                value={novoMatPreco}
-                onChange={(e) => setNovoMatPreco(Number(e.target.value))}
+                step="0.01"
+                min={0}
+                placeholder="Valor R$"
+                value={novoMatValor === 0 ? '' : novoMatValor}
+                onChange={(e) => setNovoMatValor(Number(e.target.value))}
                 className="col-span-2 bg-secondary border border-border rounded-xl px-2.5 py-1.5 text-xs text-foreground focus:border-accent focus:outline-none"
               />
               <button
@@ -325,9 +494,11 @@ export const ModalEquipamentoDefeito: React.FC<Props> = ({
             <div className="space-y-1">
               {materiais.map((m, i) => (
                 <div key={i} className="flex items-center justify-between bg-secondary/50 px-3 py-1.5 rounded-lg border border-border text-xs text-foreground">
-                  <span>{m.quantidade}x {m.descricao}</span>
+                  <span>{m.quantidade}x {m.nome || m.descricao}</span>
                   <div className="flex items-center gap-3">
-                    <span className="font-semibold text-accent">R$ {((m.valor_unitario || 0) * m.quantidade).toFixed(2)}</span>
+                    <span className="font-semibold text-accent">
+                      R$ {(((m.valor || m.valor_unitario || 0) * m.quantidade)).toFixed(2)}
+                    </span>
                     <button type="button" onClick={() => handleRemoveMaterial(i)} className="text-muted-foreground hover:text-destructive cursor-pointer">
                       <Trash2 className="w-3 h-3" />
                     </button>
@@ -335,18 +506,6 @@ export const ModalEquipamentoDefeito: React.FC<Props> = ({
                 </div>
               ))}
             </div>
-          </div>
-
-          {/* Technical Notes */}
-          <div>
-            <label className="block text-xs font-semibold text-foreground mb-1">Parecer Técnico do Equipamento</label>
-            <textarea
-              rows={2}
-              value={observacoes}
-              onChange={(e) => setObservacoes(e.target.value)}
-              placeholder="Descreva detalhes das medições de corrente, pressão, ajustes e orientações ao cliente..."
-              className="w-full bg-secondary border border-border rounded-xl p-2.5 text-xs text-foreground focus:border-accent focus:outline-none"
-            />
           </div>
 
           <div className="flex justify-end gap-3 pt-3 border-t border-border">

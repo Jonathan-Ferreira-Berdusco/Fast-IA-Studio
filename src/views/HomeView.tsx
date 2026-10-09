@@ -16,10 +16,39 @@ export const HomeView: React.FC<Props> = ({ tecnico, onLogout, onSelectChamado, 
   const [chamados, setChamados] = useState<OrdemServico[]>([]);
   const [filterStatus, setFilterStatus] = useState<StatusChamado | 'TODOS'>('TODOS');
   const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const loadChamados = () => {
-    const list = ChamadoService.listarChamados(filterStatus, searchQuery);
-    setChamados(list);
+  const loadChamados = async () => {
+    try {
+      setLoading(true);
+      const list = await ChamadoService.listarChamados();
+      let filtered =
+        tecnico.role === 'tecnico'
+          ? list.filter((c) => Number(c.id_tecnico_atribuido) === Number(tecnico.id_tecnico) || !c.id_tecnico_atribuido)
+          : list;
+
+      if (filterStatus !== 'TODOS') {
+        const target = filterStatus.toUpperCase().replace(/\s+/g, '_');
+        filtered = filtered.filter((c) => String(c.status).toUpperCase().replace(/\s+/g, '_') === target);
+      }
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        filtered = filtered.filter(
+          (c) =>
+            c.codigo_os.toLowerCase().includes(q) ||
+            (c.cliente?.razao_social && c.cliente.razao_social.toLowerCase().includes(q)) ||
+            (c.cliente?.nome_fantasia && c.cliente.nome_fantasia.toLowerCase().includes(q)) ||
+            (c.descricao_cliente && c.descricao_cliente.toLowerCase().includes(q))
+        );
+      }
+
+      setChamados(filtered);
+    } catch (err) {
+      console.error('Erro ao carregar chamados na HomeView:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {

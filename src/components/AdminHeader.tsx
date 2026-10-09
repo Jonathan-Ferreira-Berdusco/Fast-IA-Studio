@@ -4,7 +4,6 @@ import {
   LogOut,
   Server,
   RefreshCw,
-  Smartphone,
 } from 'lucide-react';
 import { ChamadoService } from '../services/chamadoService';
 
@@ -14,7 +13,6 @@ interface Props {
   totalConcluidos: number;
   onOpenNovaOS: () => void;
   onLogout?: () => void;
-  onSwitchToTechView?: () => void;
 }
 
 export const AdminHeader: React.FC<Props> = ({
@@ -23,7 +21,6 @@ export const AdminHeader: React.FC<Props> = ({
   totalConcluidos,
   onOpenNovaOS,
   onLogout,
-  onSwitchToTechView,
 }) => {
   const [isOnline, setIsOnline] = useState<boolean>(ChamadoService.getIsApiOnline());
   const [isSyncing, setIsSyncing] = useState(false);
@@ -85,18 +82,6 @@ export const AdminHeader: React.FC<Props> = ({
               <span className="font-bold text-emerald-300">{totalConcluidos}</span>
             </div>
           </div>
-
-          {/* Switch to Mobile Technician View if prop provided */}
-          {onSwitchToTechView && (
-            <button
-              onClick={onSwitchToTechView}
-              title="Alternar para Visão do Técnico de Campo"
-              className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs rounded-xl border border-white/20 flex items-center gap-1.5 transition-all cursor-pointer"
-            >
-              <Smartphone className="w-4 h-4 text-blue-200" />
-              <span className="hidden md:inline">Visão Técnico</span>
-            </button>
-          )}
 
           {/* Nova OS */}
           <button

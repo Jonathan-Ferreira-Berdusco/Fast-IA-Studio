@@ -9,7 +9,18 @@ interface Props {
 }
 
 export const CardChamado: React.FC<Props> = ({ chamado, onSelect }) => {
-  const c = chamado.cliente;
+  const c = chamado.cliente || {
+    id_cliente: chamado.id_cliente || 1,
+    nome_fantasia: chamado.cliente_nome || 'Cliente',
+    razao_social: chamado.cliente_nome || 'Cliente',
+    cnpj_cpf: '',
+    telefone: '',
+    endereco: '',
+    numero: '',
+    bairro: '',
+    cidade: '',
+    uf: '',
+  };
   const visita = chamado.visitas?.[0];
   const equipamentosCount = visita?.servicos_realizados?.length || 0;
 
@@ -67,7 +78,9 @@ export const CardChamado: React.FC<Props> = ({ chamado, onSelect }) => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5 truncate">
             <MapPin className="w-3.5 h-3.5 text-accent shrink-0" />
-            <span className="truncate">{c.endereco}, {c.numero} - {c.bairro}, {c.cidade}</span>
+            <span className="truncate">
+              {[c.endereco, c.numero].filter(Boolean).join(', ')}{c.bairro || c.cidade ? ' - ' : ''}{[c.bairro, c.cidade].filter(Boolean).join('/') || (c.endereco ? '' : 'Endereço não informado')}
+            </span>
           </div>
           <div className="flex items-center gap-1.5">
             <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />

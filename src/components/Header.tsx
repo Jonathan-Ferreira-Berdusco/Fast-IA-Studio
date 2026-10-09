@@ -46,11 +46,17 @@ export const Header: React.FC<HeaderProps> = ({ tecnico, onLogout, onSwitchToAdm
             )}
 
             <div className="hidden md:flex items-center gap-2 bg-secondary border border-border rounded-lg px-3 py-1.5">
-              <img
-                src={tecnico.avatar_url}
-                alt={tecnico.nome}
-                className="w-7 h-7 rounded-full object-cover ring-2 ring-accent/40"
-              />
+              {tecnico.avatar_url ? (
+                <img
+                  src={tecnico.avatar_url}
+                  alt={tecnico.nome}
+                  className="w-7 h-7 rounded-full object-cover ring-2 ring-accent/40"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-accent/20 text-accent flex items-center justify-center font-bold text-xs ring-2 ring-accent/40">
+                  {tecnico.nome.slice(0, 2).toUpperCase()}
+                </div>
+              )}
               <div className="text-left">
                 <p className="text-xs font-semibold text-foreground leading-tight">{tecnico.nome}</p>
                 <p className="text-[10px] text-accent leading-tight">{tecnico.especialidade || 'Técnico Autorizado'}</p>

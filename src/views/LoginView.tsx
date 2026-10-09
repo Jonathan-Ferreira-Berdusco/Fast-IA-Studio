@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Tecnico } from '../types';
 import { ChamadoService } from '../services/chamadoService';
-import { TECNICOS_MOCK } from '../data/mockData';
 import {
   Wrench,
   Shield,
@@ -10,9 +9,7 @@ import {
   Mail,
   Eye,
   EyeOff,
-  ShieldCheck,
   Server,
-  CheckCircle,
   AlertCircle,
   Loader2,
 } from 'lucide-react';
@@ -22,8 +19,8 @@ interface Props {
 }
 
 export const LoginView: React.FC<Props> = ({ onLoginSuccess }) => {
-  const [email, setEmail] = useState('admin@fastariam.com');
-  const [password, setPassword] = useState('admin123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [lembreme, setLembreme] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -38,38 +35,26 @@ export const LoginView: React.FC<Props> = ({ onLoginSuccess }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email.trim() || !password.trim()) {
+      setErrorMessage('Por favor, informe seu e-mail e senha.');
+      return;
+    }
+
     setLoading(true);
     setErrorMessage(null);
 
     try {
-      const user = await ChamadoService.loginWithCredentials(email, password);
+      const user = await ChamadoService.loginWithCredentials(email.trim(), password);
       onLoginSuccess(user);
     } catch (err: any) {
-      console.warn('Erro ao autenticar:', err);
       const msg =
         err?.detail ||
         err?.message ||
-        'Não foi possível autenticar. Verifique se o backend FastAPI está em execução na porta 8000.';
+        'Falha na autenticação. Verifique suas credenciais e tente novamente.';
       setErrorMessage(msg);
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleQuickLoginAdmin = () => {
-    setEmail('admin@fastariam.com');
-    setPassword('admin123');
-  };
-
-  const handleQuickLoginTecnico = () => {
-    setEmail('eletropaulorefrigeracao@gmail.com');
-    setPassword('senhaSuperSecreta123');
-  };
-
-  const handleOfflineDemo = () => {
-    const demo = TECNICOS_MOCK[0];
-    ChamadoService.login(demo.id_tecnico);
-    onLoginSuccess(demo);
   };
 
   return (
@@ -85,16 +70,20 @@ export const LoginView: React.FC<Props> = ({ onLoginSuccess }) => {
         <div className="flex justify-center mb-4">
           <div
             className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium border ${
-              apiOnline
+              apiOnline === true
                 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                : apiOnline === false
+                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
                 : 'bg-muted text-muted-foreground border-border'
             }`}
           >
             <Server className="w-3 h-3" />
             <span>
-              {apiOnline
-                ? 'Backend FastAPI Conectado (:8000)'
-                : 'Backend FastAPI Local (http://127.0.0.1:8000)'}
+              {apiOnline === true
+                ? 'Servidor API Conectado'
+                : apiOnline === false
+                ? 'Servidor API Não Detectado'
+                : 'Verificando Conexão...'}
             </span>
           </div>
         </div>
@@ -109,7 +98,7 @@ export const LoginView: React.FC<Props> = ({ onLoginSuccess }) => {
             <span className="text-destructive font-black">GÔNDOLAS</span>
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
-            FAST Gôndolas & Check-outs • Sistema Integrado de Gestão Técnica
+            FAST Gôndolas & Check-outs • Sistema de Gestão de Ordens de Serviço
           </p>
         </div>
 
@@ -117,7 +106,7 @@ export const LoginView: React.FC<Props> = ({ onLoginSuccess }) => {
           <div className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-xl text-destructive text-xs flex items-start gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="font-semibold">Falha na Autenticação</p>
+              <p className="font-semibold">Não foi possível autenticar</p>
               <p className="text-[11px] mt-0.5 opacity-90">{errorMessage}</p>
             </div>
           </div>
@@ -126,7 +115,7 @@ export const LoginView: React.FC<Props> = ({ onLoginSuccess }) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-foreground mb-1.5">
-              E-mail de Acesso (Username)
+              E-mail de Acesso
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 absolute left-3.5 top-3.5 text-muted-foreground" />
@@ -135,7 +124,8 @@ export const LoginView: React.FC<Props> = ({ onLoginSuccess }) => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@fastariam.com"
+                placeholder="seu.email@empresa.com.br"
+                autoComplete="email"
                 className="w-full bg-secondary border border-border rounded-xl py-2.5 pl-10 pr-4 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all"
               />
             </div>
@@ -143,7 +133,7 @@ export const LoginView: React.FC<Props> = ({ onLoginSuccess }) => {
 
           <div>
             <label className="block text-xs font-semibold text-foreground mb-1.5">
-              Senha de Acesso
+              Senha
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 absolute left-3.5 top-3.5 text-muted-foreground" />
@@ -152,13 +142,15 @@ export const LoginView: React.FC<Props> = ({ onLoginSuccess }) => {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="admin123"
+                placeholder="Digite sua senha"
+                autoComplete="current-password"
                 className="w-full bg-secondary border border-border rounded-xl py-2.5 pl-10 pr-10 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3.5 top-3.5 text-muted-foreground hover:text-foreground"
+                className="absolute right-3.5 top-3.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                title={showPassword ? 'Ocultar senha' : 'Exibir senha'}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -171,13 +163,10 @@ export const LoginView: React.FC<Props> = ({ onLoginSuccess }) => {
                 type="checkbox"
                 checked={lembreme}
                 onChange={(e) => setLembreme(e.target.checked)}
-                className="w-4 h-4 rounded bg-secondary border-border accent-primary"
+                className="w-4 h-4 rounded bg-secondary border-border accent-primary cursor-pointer"
               />
-              <span>Lembrar de mim</span>
+              <span>Manter conectado</span>
             </label>
-            <span className="text-primary hover:underline cursor-pointer text-[11px] font-medium">
-              Esqueceu a senha?
-            </span>
           </div>
 
           <button
@@ -188,7 +177,7 @@ export const LoginView: React.FC<Props> = ({ onLoginSuccess }) => {
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Autenticando via API...</span>
+                <span>Autenticando...</span>
               </>
             ) : (
               <>
@@ -199,44 +188,10 @@ export const LoginView: React.FC<Props> = ({ onLoginSuccess }) => {
           </button>
         </form>
 
-        {/* Quick Credentials Helpers */}
-        <div className="mt-6 pt-4 border-t border-border space-y-2">
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider text-center">
-            Credenciais Padrão do Backend
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={handleQuickLoginAdmin}
-              className="py-2 px-2 bg-secondary hover:bg-primary/10 text-foreground hover:text-primary border border-border hover:border-primary/30 rounded-xl text-[11px] font-bold transition-all text-center"
-            >
-              👑 Admin Mestre
-              <span className="block text-[9px] font-normal text-muted-foreground">admin123</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleQuickLoginTecnico}
-              className="py-2 px-2 bg-secondary hover:bg-primary/10 text-foreground hover:text-primary border border-border hover:border-primary/30 rounded-xl text-[11px] font-bold transition-all text-center"
-            >
-              🔧 Técnico Campo
-              <span className="block text-[9px] font-normal text-muted-foreground">senhaSuperSecreta123</span>
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleOfflineDemo}
-            className="w-full mt-2 py-2 px-3 bg-transparent hover:bg-secondary text-muted-foreground hover:text-foreground border border-dashed border-border rounded-xl text-xs font-medium transition-all text-center flex items-center justify-center gap-1.5"
-          >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Acessar no Modo Local / Offline</span>
-          </button>
-        </div>
-
         {/* Security Footer */}
-        <div className="mt-4 text-center">
+        <div className="mt-6 pt-4 border-t border-border text-center">
           <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-1">
-            <Shield className="w-3 h-3 text-primary" /> FAST Gôndolas & Check-outs v2.4 • FastAPI Integration
+            <Shield className="w-3 h-3 text-primary" /> FAST Gôndolas & Check-outs • Acesso Seguro
           </p>
         </div>
       </div>

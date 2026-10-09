@@ -53,10 +53,21 @@ export const DetalheChamadoView: React.FC<Props> = ({ id_os, onBack }) => {
   const [loadingCustos, setLoadingCustos] = useState(false);
   const [showConfirmConcluir, setShowConfirmConcluir] = useState(false);
   const [avisoAssinatura, setAvisoAssinatura] = useState(false);
+  const [loadingOS, setLoadingOS] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
-  const loadData = () => {
-    const data = ChamadoService.getChamadoPorId(id_os);
-    setChamado(data ? { ...data } : null);
+  const loadData = async () => {
+    try {
+      setLoadingOS(true);
+      const data = await ChamadoService.getChamadoPorId(id_os);
+      setChamado(data ? { ...data } : null);
+    } catch (err: any) {
+      console.error('Erro ao carregar chamado:', err);
+      setActionError(err?.detail || err?.message || 'Falha ao carregar detalhes da Ordem de Serviço.');
+    } finally {
+      setLoadingOS(false);
+    }
   };
 
   useEffect(() => {
@@ -69,7 +80,9 @@ export const DetalheChamadoView: React.FC<Props> = ({ id_os, onBack }) => {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4 font-sans">
         <div className="text-center">
-          <p className="text-muted-foreground">Chamado não encontrado.</p>
+          <p className="text-muted-foreground">
+            {loadingOS ? 'Carregando Ordem de Serviço...' : 'Chamado não encontrado.'}
+          </p>
           <button
             onClick={onBack}
             className="mt-4 px-4 py-2 bg-secondary hover:bg-muted text-foreground border border-border rounded-xl text-xs font-semibold cursor-pointer"
@@ -81,87 +94,154 @@ export const DetalheChamadoView: React.FC<Props> = ({ id_os, onBack }) => {
     );
   }
 
-  const c = chamado.cliente;
+  const c = chamado.cliente || {
+    id_cliente: chamado.id_cliente || 1,
+    nome_fantasia: chamado.cliente_nome || 'Cliente',
+    razao_social: chamado.cliente_nome || 'Cliente',
+    cnpj_cpf: '',
+    contato_responsavel: 'Responsável',
+    telefone: '',
+    endereco: '',
+    numero: '',
+    bairro: '',
+    cidade: '',
+    uf: '',
+  };
   const visita = chamado.visitas?.[0];
 
   // Workflow Handlers
-  const handleConfirmIda = ({ km, fotoUrl }: { km: number; fotoUrl?: string }) => {
-    const updated = ChamadoService.iniciarDeslocamentoIda(id_os, km, fotoUrl);
-    setChamado({ ...updated });
-    setShowDeslocamentoIda(false);
+  const handleConfirmIda = async (data: { km: number; fotoFile?: File }) => {
+    setActionError(null);
+    try {
+      const updated = await ChamadoService.iniciarDeslocamentoIda(id_os, data.km, data.fotoFile);
+      setChamado({ ...updated });
+      setShowDeslocamentoIda(false);
+      setActionSuccess('Deslocamento de ida iniciado com sucesso!');
+    } catch (err: any) {
+      console.error('Erro ao iniciar ida:', err);
+      setActionError(err?.detail || err?.message || 'Falha ao registrar deslocamento de ida.');
+    }
   };
 
-  const handleConfirmChegada = ({ km, fotoUrl }: { km: number; fotoUrl?: string }) => {
-    const updated = ChamadoService.registrarChegadaCliente(id_os, km, fotoUrl);
-    setChamado({ ...updated });
-    setShowChegadaModal(false);
+  const handleConfirmChegada = async (data: { km: number; fotoFile?: File }) => {
+    setActionError(null);
+    try {
+      const updated = await ChamadoService.registrarChegadaCliente(id_os, data.km, data.fotoFile);
+      setChamado({ ...updated });
+      setShowChegadaModal(false);
+      setActionSuccess('Chegada ao cliente registrada e atendimento iniciado!');
+    } catch (err: any) {
+      console.error('Erro ao registrar chegada:', err);
+      setActionError(err?.detail || err?.message || 'Falha ao registrar chegada ao cliente.');
+    }
   };
 
-  const handleConfirmPausa = (motivo: MotivoPausa, detalhe?: string) => {
-    const updated = ChamadoService.pausarVisita(id_os, motivo, detalhe);
-    setChamado({ ...updated });
-    setShowPausaModal(false);
+  const handleConfirmPausa = async (motivo: MotivoPausa, detalhe?: string) => {
+    setActionError(null);
+    try {
+      const updated = await ChamadoService.pausarVisita(id_os, motivo, detalhe);
+      setChamado({ ...updated });
+      setShowPausaModal(false);
+      setActionSuccess('Atendimento pausado com sucesso.');
+    } catch (err: any) {
+      console.error('Erro ao pausar visita:', err);
+      setActionError(err?.detail || err?.message || 'Falha ao pausar o atendimento.');
+    }
   };
 
-  const handleRetomarVisita = () => {
-    const updated = ChamadoService.retomarVisita(id_os);
-    setChamado({ ...updated });
+  const handleRetomarVisita = async () => {
+    setActionError(null);
+    try {
+      const updated = await ChamadoService.retomarVisita(id_os);
+      setChamado({ ...updated });
+      setActionSuccess('Atendimento retomado com sucesso!');
+    } catch (err: any) {
+      console.error('Erro ao retomar visita:', err);
+      setActionError(err?.detail || err?.message || 'Falha ao retomar o atendimento.');
+    }
   };
 
-  const handleSaveEquipamento = (eq: ServicoEquipamento) => {
-    const updated = ChamadoService.adicionarOuAtualizarServicoEquipamento(id_os, eq);
-    setChamado({ ...updated });
-    setShowEquipamentoModal(false);
-    setEquipamentoEdicao(null);
+  const handleSaveEquipamento = async (
+    eq: ServicoEquipamento,
+    novasFotos?: { tipo: 'defeito' | 'conserto'; file: File }[]
+  ) => {
+    setActionError(null);
+    try {
+      const updated = await ChamadoService.adicionarOuAtualizarServicoEquipamento(id_os, eq);
+      setChamado({ ...updated });
+
+      // Se houver fotos adicionadas no modal, envia cada uma ao endpoint correspondente
+      if (novasFotos && novasFotos.length > 0) {
+        const visitaId = updated.visitas?.[0]?.id_visita || 1;
+        const servicoId = eq.id_servico || eq.id_servico_equipamento || 1;
+        for (const foto of novasFotos) {
+          try {
+            await ChamadoService.uploadFotoServico(id_os, visitaId, servicoId, foto.tipo, foto.file);
+          } catch (fotoErr) {
+            console.warn('Aviso ao enviar foto de equipamento:', fotoErr);
+          }
+        }
+        const refreshed = await ChamadoService.getChamadoPorId(id_os).catch(() => updated);
+        setChamado({ ...refreshed });
+      }
+
+      setShowEquipamentoModal(false);
+      setEquipamentoEdicao(null);
+      setActionSuccess('Equipamento, fotos e diagnóstico técnico salvos com sucesso!');
+    } catch (err: any) {
+      console.error('Erro ao salvar equipamento:', err);
+      setActionError(err?.detail || err?.message || 'Falha ao salvar equipamento ou defeito.');
+    }
   };
 
-  const handleConfirmVolta = ({
-    km,
-    kmFimVolta,
-    fotoUrl,
-    pedagio,
-    frete,
-  }: {
+  const handleConfirmVolta = async (data: {
     km: number;
     kmFimVolta?: number;
-    fotoUrl?: string;
-    pedagio?: number;
-    frete?: number;
+    fotoFile?: File;
+    comprovanteFile?: File;
+    comprovanteTipo?: 'pedagio' | 'frete';
+    comprovanteValor?: number;
   }) => {
-    const updated = ChamadoService.registrarDeslocamentoVolta(
-      id_os,
-      km,
-      kmFimVolta || km + 15,
-      fotoUrl
-    );
+    setActionError(null);
+    try {
+      const kmFim = data.kmFimVolta || data.km;
+      await ChamadoService.registrarDeslocamentoVolta(
+        id_os,
+        data.km,
+        kmFim,
+        data.fotoFile
+      );
 
-    if (pedagio || frete) {
-      if (pedagio) {
-        ChamadoService.adicionarComprovante(id_os, {
-          id_comprovante: 'c_' + Date.now(),
-          tipo: 'pedagio',
-          valor: pedagio,
-          descricao: 'Pedágio deslocamento volta',
+      if (data.comprovanteValor && data.comprovanteTipo) {
+        await ChamadoService.adicionarComprovante(id_os, {
+          tipo: data.comprovanteTipo,
+          valor: data.comprovanteValor,
+          descricao: `Comprovante ${data.comprovanteTipo} volta`,
+          file: data.comprovanteFile,
         });
       }
-      if (frete) {
-        ChamadoService.adicionarComprovante(id_os, {
-          id_comprovante: 'c_f_' + Date.now(),
-          tipo: 'frete',
-          valor: frete,
-          descricao: 'Frete devolução de peças',
-        });
-      }
+
+      const updated = await ChamadoService.getChamadoPorId(id_os);
+      setChamado({ ...updated });
+      setShowDeslocamentoVolta(false);
+      setActionSuccess('Deslocamento de retorno registrado com sucesso!');
+    } catch (err: any) {
+      console.error('Erro ao registrar retorno:', err);
+      setActionError(err?.detail || err?.message || 'Falha ao registrar deslocamento de volta.');
     }
-
-    setChamado({ ...ChamadoService.getChamadoPorId(id_os)! });
-    setShowDeslocamentoVolta(false);
   };
 
-  const handleSaveAssinatura = (assinatura: AssinaturaCliente) => {
-    const updated = ChamadoService.salvarAssinatura(id_os, assinatura);
-    setChamado({ ...updated });
-    setShowAssinaturaModal(false);
+  const handleSaveAssinatura = async (assinatura: any) => {
+    setActionError(null);
+    try {
+      const updated = await ChamadoService.salvarAssinatura(id_os, assinatura);
+      setChamado({ ...updated });
+      setShowAssinaturaModal(false);
+      setActionSuccess('Assinatura digital do cliente coletada e salva!');
+    } catch (err: any) {
+      console.error('Erro ao salvar assinatura:', err);
+      setActionError(err?.detail || err?.message || 'Falha ao salvar assinatura digital.');
+    }
   };
 
   const handleConcluirOS = () => {
@@ -172,27 +252,55 @@ export const DetalheChamadoView: React.FC<Props> = ({ id_os, onBack }) => {
     setShowConfirmConcluir(true);
   };
 
-  const handleExecuteConcluir = () => {
-    const updated = ChamadoService.concluirChamado(id_os, 'Atendimento efetuado em conformidade com as normas técnicas FAST Gôndolas & Check-outs.');
-    setChamado({ ...updated });
-    setShowConfirmConcluir(false);
+  const handleExecuteConcluir = async () => {
+    setActionError(null);
+    try {
+      const updated = await ChamadoService.concluirChamado(
+        id_os,
+        'Atendimento efetuado em conformidade com as normas técnicas FAST Gôndolas & Check-outs.'
+      );
+      setChamado({ ...updated });
+      setShowConfirmConcluir(false);
+      setActionSuccess('Ordem de Serviço finalizada com sucesso no backend!');
+    } catch (err: any) {
+      console.error('Erro ao concluir OS:', err);
+      setActionError(err?.detail || err?.message || 'Falha ao concluir a Ordem de Serviço.');
+    }
   };
 
   const handleAbrirCustos = async () => {
     setLoadingCustos(true);
     setShowCustosModal(true);
-    const data = await ChamadoService.calcularCustos(id_os);
-    setCustosData(data);
-    setLoadingCustos(false);
+    try {
+      const data = await ChamadoService.calcularCustos(id_os);
+      setCustosData(data);
+    } catch (err: any) {
+      console.warn('Erro ao carregar custos:', err);
+    } finally {
+      setLoadingCustos(false);
+    }
   };
 
   // State condition checks
   const normStatus = String(chamado.status).toUpperCase();
   const isPausado = normStatus === 'PAUSADO';
   const isConcluido = normStatus === 'CONCLUIDO' || normStatus === 'FINALIZADO';
-  const temIdaIniciada = Boolean(visita?.km_inicio_ida || visita?.hora_inicio_ida);
-  const temChegadaCliente = Boolean(visita?.hora_chegada_cliente || visita?.hora_inicio_atendimento);
-  const temVoltaIniciada = Boolean(visita?.km_inicio_volta || visita?.hora_inicio_volta);
+  const temIdaIniciada = Boolean(
+    (visita?.km_inicio_ida !== undefined && visita?.km_inicio_ida !== null) ||
+    visita?.hora_inicio_ida ||
+    visita?.hora_inicio_deslocamento
+  );
+  const temChegadaCliente = Boolean(
+    visita?.hora_chegada_cliente ||
+    visita?.hora_inicio_atendimento ||
+    (visita?.km_fim_ida !== undefined && visita?.km_fim_ida !== null)
+  );
+  const temVoltaIniciada = Boolean(
+    (visita?.km_inicio_volta !== undefined && visita?.km_inicio_volta !== null) ||
+    visita?.hora_inicio_volta ||
+    (visita?.km_fim_volta !== undefined && visita?.km_fim_volta !== null) ||
+    Boolean(visita?.km_total)
+  );
 
   return (
     <div className="min-h-screen bg-background pb-16 text-foreground font-sans">
@@ -235,6 +343,36 @@ export const DetalheChamadoView: React.FC<Props> = ({ id_os, onBack }) => {
       </div>
 
       <main className="max-w-5xl mx-auto px-4 pt-6 space-y-6">
+        {actionError && (
+          <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-2xl text-destructive text-xs font-semibold flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{actionError}</span>
+            </div>
+            <button
+              onClick={() => setActionError(null)}
+              className="text-muted-foreground hover:text-foreground text-xs font-bold px-2 py-1 rounded-lg hover:bg-secondary cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {actionSuccess && (
+          <div className="p-4 bg-success/10 border border-success/30 rounded-2xl text-success text-xs font-semibold flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{actionSuccess}</span>
+            </div>
+            <button
+              onClick={() => setActionSuccess(null)}
+              className="text-muted-foreground hover:text-foreground text-xs font-bold px-2 py-1 rounded-lg hover:bg-secondary cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Banner Alert if Paused */}
         {isPausado && (
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center justify-between gap-4 animate-pulse">
@@ -589,7 +727,7 @@ export const DetalheChamadoView: React.FC<Props> = ({ id_os, onBack }) => {
       <ModalDeslocamento
         isOpen={showDeslocamentoIda}
         type="IDA_INICIO"
-        initialKm={visita?.km_inicio_ida || 45220}
+        initialKm={visita?.km_inicio_ida || 0}
         onClose={() => setShowDeslocamentoIda(false)}
         onConfirm={handleConfirmIda}
       />
@@ -597,7 +735,7 @@ export const DetalheChamadoView: React.FC<Props> = ({ id_os, onBack }) => {
       <ModalDeslocamento
         isOpen={showChegadaModal}
         type="IDA_CHEGADA"
-        initialKm={(visita?.km_inicio_ida || 45220) + 18}
+        initialKm={visita?.km_fim_ida || visita?.km_inicio_ida || 0}
         onClose={() => setShowChegadaModal(false)}
         onConfirm={handleConfirmChegada}
       />
@@ -605,7 +743,7 @@ export const DetalheChamadoView: React.FC<Props> = ({ id_os, onBack }) => {
       <ModalDeslocamento
         isOpen={showDeslocamentoVolta}
         type="VOLTA_REGISTRO"
-        initialKm={visita?.km_fim_ida || 45238}
+        initialKm={visita?.km_inicio_volta || visita?.km_fim_ida || 0}
         onClose={() => setShowDeslocamentoVolta(false)}
         onConfirm={handleConfirmVolta}
       />

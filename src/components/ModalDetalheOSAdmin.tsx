@@ -48,10 +48,23 @@ export const ModalDetalheOSAdmin: React.FC<Props> = ({
   const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string } | null>(null);
   const [showCancelPrompt, setShowCancelPrompt] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   if (!isOpen || !os) return null;
 
-  const c = os.cliente;
+  const c = os.cliente || {
+    id_cliente: os.id_cliente || 1,
+    nome_fantasia: os.cliente_nome || 'Cliente',
+    razao_social: os.cliente_nome || 'Cliente',
+    cnpj_cpf: '',
+    contato_responsavel: 'Responsável',
+    telefone: '',
+    endereco: '',
+    numero: '',
+    bairro: '',
+    cidade: '',
+    uf: '',
+  };
   const t = os.tecnico;
   const visita = os.visitas?.[0];
 
@@ -101,15 +114,20 @@ export const ModalDetalheOSAdmin: React.FC<Props> = ({
     },
   ].filter((item) => item.km || item.url || item.hora);
 
-  const handleCancelOS = () => {
+  const handleCancelOS = async () => {
     if (!cancelReason.trim()) {
-      alert('Por favor, informe o motivo do cancelamento.');
+      setCancelError('Por favor, informe o motivo do cancelamento.');
       return;
     }
-    ChamadoService.cancelarChamado(os.id_os, cancelReason);
-    setShowCancelPrompt(false);
-    if (onStatusUpdated) onStatusUpdated();
-    onClose();
+    setCancelError(null);
+    try {
+      await ChamadoService.cancelarChamado(os.id_os, cancelReason);
+      setShowCancelPrompt(false);
+      if (onStatusUpdated) onStatusUpdated();
+      onClose();
+    } catch (err: any) {
+      setCancelError(err?.detail || err?.message || 'Falha ao cancelar chamado.');
+    }
   };
 
   return (
@@ -188,6 +206,9 @@ export const ModalDetalheOSAdmin: React.FC<Props> = ({
               <AlertTriangle className="w-4 h-4" />
               <span>Confirmar Cancelamento da Ordem de Serviço</span>
             </div>
+            {cancelError && (
+              <p className="text-destructive text-xs font-semibold">{cancelError}</p>
+            )}
             <input
               type="text"
               placeholder="Digite o motivo do cancelamento (ex: cliente desmarcou, cancelado pela gerência)..."

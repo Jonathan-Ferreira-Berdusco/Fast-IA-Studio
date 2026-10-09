@@ -1,28 +1,31 @@
+export type UserRole = 'admin' | 'tecnico';
+
 export type StatusChamado =
-  | 'ABERTO'
-  | 'AGENDADO'
-  | 'EM_ATENDIMENTO'
-  | 'PENDENTE'
-  | 'PAUSADO'
-  | 'CONCLUIDO'
-  | 'FINALIZADO'
-  | 'CANCELADO'
-  | 'AGUARDANDO_REAGENDAMENTO'
   | 'Aberto'
   | 'Agendado'
   | 'Em Atendimento'
   | 'Pendente'
   | 'Finalizado'
   | 'Pausado'
-  | 'Aguardando Reagendamento';
+  | 'Aguardando Reagendamento'
+  | 'ABERTO'
+  | 'AGENDADO'
+  | 'EM_ATENDIMENTO'
+  | 'PENDENTE'
+  | 'CONCLUIDO'
+  | 'FINALIZADO'
+  | 'CANCELADO'
+  | 'PAUSADO'
+  | 'AGUARDANDO_REAGENDAMENTO';
 
-export type MotivoPausa = 
+export type MotivoPausa =
   | 'Falta de Peças / Componentes'
   | 'Aguardando Liberação do Cliente'
   | 'Horário de Almoço / Intervalo'
   | 'Fim de Expediente'
   | 'Aguardando Suporte Técnico'
-  | 'Outros';
+  | 'Outros'
+  | string;
 
 export interface DadosBancarios {
   banco?: string;
@@ -39,7 +42,7 @@ export interface Tecnico {
   telefone: string;
   cnpj?: string;
   inscricao_estadual?: string;
-  role?: 'admin' | 'tecnico';
+  role?: UserRole;
   is_active?: boolean;
   dados_bancarios?: DadosBancarios;
   banco?: string;
@@ -51,7 +54,7 @@ export interface Tecnico {
 }
 
 export interface ContatoCliente {
-  id_contato: string | number;
+  id_contato?: string | number;
   nome: string;
   cargo?: string;
   cargo_departamento?: string;
@@ -62,27 +65,27 @@ export interface ContatoCliente {
 export interface Cliente {
   id_cliente: number;
   razao_social: string;
-  nome_fantasia?: string;
   codigo?: number;
-  cnpj_cpf?: string;
-  telefone: string;
   contato_principal_nome?: string;
   contato_principal_telefone?: string;
-  contato_responsavel?: string;
-  contatos?: ContatoCliente[];
+  telefone: string;
   endereco: string;
   numero: string;
   bairro: string;
   cidade: string;
   uf: string;
-  cep?: string;
   is_active?: boolean;
-  latitude?: number;
-  longitude?: number;
+  // Aliases for interface compatibility
+  nome_fantasia?: string;
+  contato_responsavel?: string;
+  cnpj_cpf?: string;
+  cep?: string;
+  contatos?: ContatoCliente[];
 }
 
 export interface MaterialUtilizado {
   id_material?: number;
+  id_servico?: number;
   nome?: string;
   descricao?: string;
   quantidade: number;
@@ -93,14 +96,18 @@ export interface MaterialUtilizado {
 
 export interface FotoServico {
   id_foto: string | number;
-  tipo: 'DEFEITO' | 'CONSERTO' | 'ODOMETRO_IDA' | 'ODOMETRO_VOLTA' | 'COMPROVANTE' | 'defeito' | 'conserto';
+  id_servico?: number;
+  tipo: 'defeito' | 'conserto' | 'DEFEITO' | 'CONSERTO';
   url: string;
   descricao?: string;
   data_hora?: string;
 }
 
 export interface DefeitoRelatado {
-  id_defeito: string | number;
+  id_defeito?: string | number;
+  id_servico?: number;
+  tipo?: string;
+  defeito?: string;
   descricao: string;
   solucionado: boolean;
   observacoes?: string;
@@ -110,11 +117,11 @@ export interface ServicoEquipamento {
   id_servico?: number;
   id_servico_equipamento?: number;
   id_visita?: number;
+  numero_serie_atendido?: string;
+  numero_serie?: string;
   nome_equipamento: string;
   modelo?: string;
-  numero_serie?: string;
-  numero_serie_atendido?: string;
-  status_servico?: 'Pendente' | 'Sanado' | 'Substituído' | 'Retirado para Oficina';
+  status_servico?: 'Pendente' | 'Sanado' | 'Substituído' | 'Retirado para Oficina' | string;
   defeitos_principais?: string[];
   defeito_outros_descricao?: string;
   sub_defeitos_refrigeracao?: string[];
@@ -136,36 +143,36 @@ export interface ServicoEquipamento {
 export interface RegistroPausa {
   id_pausa: string | number;
   visita_id?: number;
-  motivo: MotivoPausa | string;
+  motivo: MotivoPausa;
   descricao?: string;
   detalhe?: string;
   hora_inicio?: string;
   hora_fim?: string;
   criado_em?: string;
+  por_tecnico_id?: number;
   is_ativa?: boolean;
 }
 
 export interface ComprovanteCusto {
-  id_comprovante: string | number;
+  id_comprovante?: string | number;
   id_visita?: number;
-  tipo: 'pedagio' | 'frete' | 'combustivel' | 'outros';
+  tipo: 'pedagio' | 'frete' | string;
   valor: number;
   descricao?: string;
   url?: string;
-  foto_url?: string;
 }
 
 export interface Visita {
   id_visita: number;
   id_os: number;
   data_visita: string;
-  
+
   // Deslocamento IDA
   hora_inicio_deslocamento?: string;
   km_inicio_ida?: number;
   hora_inicio_ida?: string;
   foto_inicio_ida_url?: string;
-  
+
   km_fim_ida?: number;
   hora_fim_ida?: string;
   foto_fim_ida_url?: string;
@@ -175,8 +182,8 @@ export interface Visita {
   hora_inicio_atendimento?: string;
   hora_fim_atendimento?: string;
   descricao_servico_executado?: string;
+  servico_finalizado?: boolean;
   pendencia?: string;
-  pendencias?: string;
 
   nome_ajudante?: string;
   telefone_ajudante?: string;
@@ -193,7 +200,6 @@ export interface Visita {
   km_total?: number;
   valor_pedagio?: number;
   valor_frete_devolucao?: number;
-  servico_finalizado?: boolean;
 
   odometro_inicio_url?: string;
   odometro_fim_url?: string;
@@ -224,7 +230,7 @@ export interface EstadoVisitaResponse {
 export interface AssinaturaCliente {
   assinatura_url: string;
   nome_responsavel: string;
-  documento: string; // RG or CPF
+  documento: string;
   cargo_funcao?: string;
   data_assinatura?: string;
 }

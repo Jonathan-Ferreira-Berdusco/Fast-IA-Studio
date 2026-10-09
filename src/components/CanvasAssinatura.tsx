@@ -21,8 +21,10 @@ export const CanvasAssinatura: React.FC<Props> = ({
   const [nomeResponsavel, setNomeResponsavel] = useState(nomeClienteDefault);
   const [documento, setDocumento] = useState('');
   const [cargo, setCargo] = useState('Gerente / Responsável');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    setErrorMsg(null);
     if (isOpen && canvasRef.current) {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
@@ -84,13 +86,14 @@ export const CanvasAssinatura: React.FC<Props> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!hasSignature) {
-      alert('Por favor, solicite ao cliente que assine no painel antes de confirmar.');
+      setErrorMsg('Por favor, solicite ao cliente que assine no painel antes de confirmar.');
       return;
     }
     if (!nomeResponsavel.trim()) {
-      alert('Por favor, informe o nome do responsável.');
+      setErrorMsg('Por favor, informe o nome do responsável.');
       return;
     }
+    setErrorMsg(null);
 
     const canvas = canvasRef.current;
     const dataDataUrl = canvas ? canvas.toDataURL('image/png') : '';
@@ -125,6 +128,11 @@ export const CanvasAssinatura: React.FC<Props> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {errorMsg && (
+            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-600 dark:text-red-400 font-semibold text-xs">
+              {errorMsg}
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1">Nome do Responsável *</label>

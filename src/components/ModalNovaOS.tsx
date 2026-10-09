@@ -19,8 +19,8 @@ export const ModalNovaOS: React.FC<Props> = ({
   onClose,
   onSave,
 }) => {
-  const [idCliente, setIdCliente] = useState<number>(clientes[0]?.id_cliente || 1);
-  const [idTecnico, setIdTecnico] = useState<number>(tecnicos[0]?.id_tecnico || 1);
+  const [idCliente, setIdCliente] = useState<number>(clientes[0]?.id_cliente || 0);
+  const [idTecnico, setIdTecnico] = useState<number>(0);
   const [prioridade, setPrioridade] = useState<'Baixa' | 'Média' | 'Alta' | 'Urgente'>('Média');
   const [dataAgendamento, setDataAgendamento] = useState('');
   const [descricaoCliente, setDescricaoCliente] = useState('');
@@ -29,11 +29,13 @@ export const ModalNovaOS: React.FC<Props> = ({
   const [equipamentoSerie, setEquipamentoSerie] = useState('');
   const [emGarantia, setEmGarantia] = useState(true);
   const [pedido, setPedido] = useState('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    setErrorMsg(null);
     if (osEdicao) {
       setIdCliente(osEdicao.id_cliente);
-      setIdTecnico(osEdicao.id_tecnico_atribuido || tecnicos[0]?.id_tecnico || 1);
+      setIdTecnico(osEdicao.id_tecnico_atribuido || 0);
       setPrioridade(osEdicao.prioridade);
       setDataAgendamento(osEdicao.data_agendamento || '');
       setDescricaoCliente(osEdicao.descricao_cliente || '');
@@ -47,18 +49,18 @@ export const ModalNovaOS: React.FC<Props> = ({
         setEquipamentoSerie(eq.numero_serie || '');
       }
     } else {
-      setIdCliente(clientes[0]?.id_cliente || 1);
-      setIdTecnico(tecnicos[0]?.id_tecnico || 1);
+      setIdCliente(clientes[0]?.id_cliente || 0);
+      setIdTecnico(tecnicos[0]?.id_tecnico || 0);
       setPrioridade('Média');
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      setDataAgendamento(`${tomorrow.toISOString().split('T')[0]} 09:00`);
+      setDataAgendamento(tomorrow.toISOString().split('T')[0]);
       setDescricaoCliente('');
       setEquipamentoNome('');
       setEquipamentoModelo('');
       setEquipamentoSerie('');
       setEmGarantia(true);
-      setPedido(`PED-${Math.floor(10000 + Math.random() * 90000)}`);
+      setPedido('');
     }
   }, [osEdicao, isOpen, clientes, tecnicos]);
 
@@ -66,15 +68,20 @@ export const ModalNovaOS: React.FC<Props> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!descricaoCliente.trim()) {
-      alert('Por favor, informe a descrição do problema ou solicitação.');
+    if (!idCliente || Number(idCliente) <= 0) {
+      setErrorMsg('Por favor, selecione um cliente cadastrado no sistema.');
       return;
     }
+    if (!descricaoCliente.trim()) {
+      setErrorMsg('Por favor, informe a descrição do problema ou solicitação.');
+      return;
+    }
+    setErrorMsg(null);
 
     onSave({
       id_os: osEdicao?.id_os,
       id_cliente: Number(idCliente),
-      id_tecnico_atribuido: Number(idTecnico),
+      id_tecnico_atribuido: Number(idTecnico) > 0 ? Number(idTecnico) : null,
       prioridade,
       data_agendamento: dataAgendamento,
       descricao_cliente: descricaoCliente,
@@ -111,6 +118,13 @@ export const ModalNovaOS: React.FC<Props> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          {errorMsg && (
+            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-600 dark:text-red-400 font-semibold flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
           {/* Client & Technician Selection */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -122,26 +136,31 @@ export const ModalNovaOS: React.FC<Props> = ({
                 onChange={(e) => setIdCliente(Number(e.target.value))}
                 className="w-full bg-secondary border border-border rounded-xl p-3 text-foreground focus:border-primary focus:outline-none cursor-pointer"
               >
-                {clientes.map((c) => (
-                  <option key={c.id_cliente} value={c.id_cliente}>
-                    {c.nome_fantasia} ({c.cidade}/{c.uf})
-                  </option>
-                ))}
+                {clientes.length === 0 ? (
+                  <option value={0}>Nenhum cliente disponível (Cadastre um cliente primeiro)</option>
+                ) : (
+                  clientes.map((c) => (
+                    <option key={c.id_cliente} value={c.id_cliente}>
+                      {c.nome_fantasia || c.razao_social} ({c.cidade}/{c.uf})
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 
             <div>
               <label className="block font-semibold text-foreground mb-1.5 flex items-center gap-1.5">
-                <Wrench className="w-3.5 h-3.5 text-primary" /> Técnico Responsável *
+                <Wrench className="w-3.5 h-3.5 text-primary" /> Técnico Responsável (Opcional)
               </label>
               <select
                 value={idTecnico}
                 onChange={(e) => setIdTecnico(Number(e.target.value))}
                 className="w-full bg-secondary border border-border rounded-xl p-3 text-foreground focus:border-primary focus:outline-none cursor-pointer"
               >
+                <option value={0}>Atribuir Posteriormente (Status: Aberto)</option>
                 {tecnicos.map((t) => (
                   <option key={t.id_tecnico} value={t.id_tecnico}>
-                    {t.nome} ({t.especialidade})
+                    {t.nome} ({t.especialidade || 'Técnico'})
                   </option>
                 ))}
               </select>

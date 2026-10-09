@@ -21,6 +21,12 @@ export const ModalAtribuirTecnico: React.FC<Props> = ({
     os?.id_tecnico_atribuido || tecnicos[0]?.id_tecnico || 1
   );
 
+  React.useEffect(() => {
+    if (isOpen && os) {
+      setSelectedTecnicoId(os.id_tecnico_atribuido || tecnicos[0]?.id_tecnico || 1);
+    }
+  }, [isOpen, os, tecnicos]);
+
   if (!isOpen || !os) return null;
 
   const handleSave = () => {
@@ -39,7 +45,7 @@ export const ModalAtribuirTecnico: React.FC<Props> = ({
               <h3 className="text-sm font-bold text-foreground font-['Space_Grotesk']">
                 Atribuir Técnico a OS #{os.codigo_os}
               </h3>
-              <p className="text-[11px] text-muted-foreground">Cliente: {os.cliente.nome_fantasia}</p>
+              <p className="text-[11px] text-muted-foreground">Cliente: {os.cliente?.nome_fantasia || os.cliente_nome || 'Cliente'}</p>
             </div>
           </div>
           <button
@@ -55,33 +61,45 @@ export const ModalAtribuirTecnico: React.FC<Props> = ({
             Selecione o Técnico Responsável:
           </label>
           <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-            {tecnicos.map((t) => {
-              const isSelected = Number(selectedTecnicoId) === Number(t.id_tecnico);
-              return (
-                <div
-                  key={t.id_tecnico}
-                  onClick={() => setSelectedTecnicoId(t.id_tecnico)}
-                  className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer ${
-                    isSelected
-                      ? 'bg-primary/10 border-primary/50 ring-1 ring-primary/30'
-                      : 'bg-secondary/60 border-border hover:border-muted-foreground/30'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={t.avatar_url}
-                      alt={t.nome}
-                      className="w-9 h-9 rounded-full object-cover ring-2 ring-border"
-                    />
-                    <div>
-                      <p className="text-xs font-bold text-foreground">{t.nome}</p>
-                      <p className="text-[10px] text-primary font-medium">{t.especialidade}</p>
+            {tecnicos.length === 0 ? (
+              <div className="p-6 text-center text-muted-foreground bg-secondary/40 rounded-xl border border-dashed border-border text-xs">
+                Nenhum técnico cadastrado ou disponível no momento.
+              </div>
+            ) : (
+              tecnicos.map((t) => {
+                const isSelected = Number(selectedTecnicoId) === Number(t.id_tecnico);
+                return (
+                  <div
+                    key={t.id_tecnico}
+                    onClick={() => setSelectedTecnicoId(t.id_tecnico)}
+                    className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-primary/10 border-primary/50 ring-1 ring-primary/30'
+                        : 'bg-secondary/60 border-border hover:border-muted-foreground/30'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {t.avatar_url ? (
+                        <img
+                          src={t.avatar_url}
+                          alt={t.nome}
+                          className="w-9 h-9 rounded-full object-cover ring-2 ring-border"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-xs ring-2 ring-border">
+                          {t.nome.slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-xs font-bold text-foreground">{t.nome}</p>
+                        <p className="text-[10px] text-primary font-medium">{t.especialidade || 'Técnico'}</p>
+                      </div>
                     </div>
+                    {isSelected && <UserCheck className="w-5 h-5 text-primary" />}
                   </div>
-                  {isSelected && <UserCheck className="w-5 h-5 text-primary" />}
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
 
@@ -95,8 +113,9 @@ export const ModalAtribuirTecnico: React.FC<Props> = ({
           </button>
           <button
             type="button"
+            disabled={tecnicos.length === 0 || !selectedTecnicoId}
             onClick={handleSave}
-            className="px-5 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl shadow-md shadow-primary/20 cursor-pointer"
+            className="px-5 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-primary-foreground font-bold rounded-xl shadow-md shadow-primary/20 cursor-pointer"
           >
             Confirmar Atribuição
           </button>

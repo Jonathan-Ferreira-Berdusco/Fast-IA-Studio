@@ -8,7 +8,19 @@ interface Props {
 }
 
 export const RelatorioOS: React.FC<Props> = ({ chamado, onClose }) => {
-  const c = chamado.cliente;
+  const c = chamado.cliente || {
+    id_cliente: chamado.id_cliente || 1,
+    nome_fantasia: chamado.cliente_nome || 'Cliente',
+    razao_social: chamado.cliente_nome || 'Cliente',
+    cnpj_cpf: '',
+    contato_responsavel: 'Responsável',
+    telefone: '',
+    endereco: '',
+    numero: '',
+    bairro: '',
+    cidade: '',
+    uf: '',
+  };
   const visita = chamado.visitas?.[0];
 
   const handlePrint = () => {
@@ -77,8 +89,8 @@ export const RelatorioOS: React.FC<Props> = ({ chamado, onClose }) => {
 
             <div className="bg-secondary/60 p-4 rounded-xl border border-border">
               <h3 className="font-bold text-accent mb-2 uppercase tracking-wide">Dados Técnicos & Visita</h3>
-              <p className="font-bold text-sm text-foreground">Técnico: {chamado.tecnico?.nome || 'Carlos Silva'}</p>
-              <p className="text-muted-foreground">Especialidade: {chamado.tecnico?.especialidade || 'Refrigeração Comercial'}</p>
+              <p className="font-bold text-sm text-foreground">Técnico: {chamado.tecnico?.nome || 'Não Atribuído'}</p>
+              <p className="text-muted-foreground">Especialidade: {chamado.tecnico?.especialidade || 'Técnico de Campo'}</p>
               <p className="text-muted-foreground mt-2">Status OS: <strong className="text-success">{chamado.status}</strong></p>
               <p className="text-muted-foreground">Em Garantia: {chamado.em_garantia ? 'SIM' : 'NÃO (Serviço Faturado)'}</p>
               {visita?.km_total && (
@@ -148,17 +160,23 @@ export const RelatorioOS: React.FC<Props> = ({ chamado, onClose }) => {
           {/* Signature Block */}
           <div className="border-t border-border pt-6 mt-6">
             <h3 className="font-bold text-xs text-accent uppercase tracking-wide mb-4">Aceite do Cliente & Assinatura</h3>
-            {chamado.assinatura ? (
+            {chamado.assinatura || chamado.assinatura_cliente_url ? (
               <div className="flex flex-wrap items-center justify-between gap-6 bg-secondary/60 p-4 rounded-xl border border-border">
                 <div className="text-xs">
-                  <p className="font-bold text-foreground">{chamado.assinatura.nome_responsavel}</p>
-                  <p className="text-muted-foreground">Documento: {chamado.assinatura.documento}</p>
-                  <p className="text-muted-foreground">Cargo: {chamado.assinatura.cargo_funcao}</p>
-                  <p className="text-muted-foreground mt-1">Assinado em: {chamado.assinatura.data_assinatura}</p>
+                  <p className="font-bold text-foreground">
+                    {chamado.assinatura?.nome_responsavel || c.contato_responsavel || 'Responsável'}
+                  </p>
+                  <p className="text-muted-foreground">Documento: {chamado.assinatura?.documento || 'Registrado digitalmente'}</p>
+                  {chamado.assinatura?.cargo_funcao && (
+                    <p className="text-muted-foreground">Cargo: {chamado.assinatura.cargo_funcao}</p>
+                  )}
+                  <p className="text-muted-foreground mt-1">
+                    Assinado em: {chamado.assinatura?.data_assinatura || chamado.data_conclusao || 'Data registrada'}
+                  </p>
                 </div>
                 <div className="bg-white p-2 rounded-xl border border-border shadow-xs">
                   <img
-                    src={chamado.assinatura.assinatura_url}
+                    src={chamado.assinatura?.assinatura_url || chamado.assinatura_cliente_url}
                     alt="Assinatura"
                     className="h-16 object-contain"
                   />

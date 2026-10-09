@@ -1,42 +1,95 @@
 import React, { useState } from 'react';
-import { Navigation, Camera, X, Check, DollarSign } from 'lucide-react';
+import { Navigation, Camera, X, Check, Upload, Image as ImageIcon } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
   type: 'IDA_INICIO' | 'IDA_CHEGADA' | 'VOLTA_REGISTRO';
   initialKm?: number;
   onClose: () => void;
-  onConfirm: (data: { km: number; fotoUrl?: string; kmFimVolta?: number; pedagio?: number; frete?: number }) => void;
+  onConfirm: (data: {
+    km: number;
+    kmFimVolta?: number;
+    fotoFile?: File;
+    comprovanteFile?: File;
+    comprovanteTipo?: 'pedagio' | 'frete';
+    comprovanteValor?: number;
+  }) => void;
 }
 
-const SAMPLE_ODOMETER_PHOTOS = [
-  'https://images.unsplash.com/photo-1580273916550-e323be2ae537?w=600&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1511919884226-fd3cad34687c?w=600&auto=format&fit=crop&q=80',
-];
-
-export const ModalDeslocamento: React.FC<Props> = ({ isOpen, type, initialKm = 45220, onClose, onConfirm }) => {
+export const ModalDeslocamento: React.FC<Props> = ({
+  isOpen,
+  type,
+  initialKm = 0,
+  onClose,
+  onConfirm,
+}) => {
   const [km, setKm] = useState<number>(initialKm);
-  const [kmVolta, setKmVolta] = useState<number>(initialKm + 15);
-  const [fotoUrl, setFotoUrl] = useState<string>(SAMPLE_ODOMETER_PHOTOS[0]);
+  const [kmVolta, setKmVolta] = useState<number>(initialKm);
+  const [fotoFile, setFotoFile] = useState<File | null>(null);
+  const [fotoPreview, setFotoPreview] = useState<string | null>(null);
+
   const [pedagio, setPedagio] = useState<number>(0);
   const [frete, setFrete] = useState<number>(0);
+  const [comprovanteFile, setComprovanteFile] = useState<File | null>(null);
+  const [comprovantePreview, setComprovantePreview] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setKm(initialKm || 0);
+      setKmVolta(initialKm || 0);
+      setFotoFile(null);
+      setFotoPreview(null);
+      setPedagio(0);
+      setFrete(0);
+      setComprovanteFile(null);
+      setComprovantePreview(null);
+    }
+  }, [isOpen, initialKm]);
 
   if (!isOpen) return null;
 
   const titles = {
-    IDA_INICIO: 'Registro de Saída / KM Inicial (Ida)',
-    IDA_CHEGADA: 'Chegada ao Cliente / Confirmar KM Final Ida',
-    VOLTA_REGISTRO: 'Registro de Deslocamento de Volta (KM)',
+    IDA_INICIO: 'Registro de Saída (Início Deslocamento Ida)',
+    IDA_CHEGADA: 'Chegada ao Cliente (Fim Deslocamento Ida)',
+    VOLTA_REGISTRO: 'Registro de Deslocamento de Volta (Retorno)',
+  };
+
+  const handleFotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setFotoFile(file);
+      setFotoPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleComprovanteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setComprovanteFile(file);
+      setComprovantePreview(URL.createObjectURL(file));
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    let comprovanteTipo: 'pedagio' | 'frete' | undefined = undefined;
+    let comprovanteValor: number | undefined = undefined;
+    if (pedagio > 0) {
+      comprovanteTipo = 'pedagio';
+      comprovanteValor = pedagio;
+    } else if (frete > 0) {
+      comprovanteTipo = 'frete';
+      comprovanteValor = frete;
+    }
+
     onConfirm({
       km,
-      fotoUrl,
       kmFimVolta: type === 'VOLTA_REGISTRO' ? kmVolta : undefined,
-      pedagio: pedagio > 0 ? pedagio : undefined,
-      frete: frete > 0 ? frete : undefined,
+      fotoFile: fotoFile || undefined,
+      comprovanteFile: comprovanteFile || undefined,
+      comprovanteTipo,
+      comprovanteValor,
     });
   };
 
@@ -56,22 +109,24 @@ export const ModalDeslocamento: React.FC<Props> = ({ isOpen, type, initialKm = 4
           </div>
           <div>
             <h2 className="text-lg font-bold text-foreground">{titles[type]}</h2>
-            <p className="text-xs text-muted-foreground">Insira a leitura do odômetro e comprovantes de deslocamento</p>
+            <p className="text-xs text-muted-foreground">Insira a quilometragem real e anexe a foto do painel</p>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           {type !== 'VOLTA_REGISTRO' ? (
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1">
-                Quilometragem Atual do Veículo (KM) *
+                Quilometragem do Odômetro (KM) *
               </label>
               <div className="relative">
                 <input
                   type="number"
                   required
-                  value={km}
+                  min={0}
+                  value={km === 0 ? '' : km}
                   onChange={(e) => setKm(Number(e.target.value))}
+                  placeholder="Ex: 45220"
                   className="w-full bg-secondary border border-border rounded-xl p-3 text-lg font-bold text-accent focus:border-accent focus:outline-none"
                 />
                 <span className="absolute right-3 top-3.5 text-xs text-muted-foreground font-semibold">KM</span>
@@ -84,84 +139,119 @@ export const ModalDeslocamento: React.FC<Props> = ({ isOpen, type, initialKm = 4
                 <input
                   type="number"
                   required
-                  value={km}
+                  min={0}
+                  value={km === 0 ? '' : km}
                   onChange={(e) => setKm(Number(e.target.value))}
+                  placeholder="Ex: 45238"
                   className="w-full bg-secondary border border-border rounded-xl p-3 text-base font-bold text-foreground focus:border-accent focus:outline-none"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-foreground mb-1">KM Chegada / Fim *</label>
+                <label className="block text-xs font-semibold text-foreground mb-1">KM Chegada Base *</label>
                 <input
                   type="number"
                   required
-                  value={kmVolta}
+                  min={0}
+                  value={kmVolta === 0 ? '' : kmVolta}
                   onChange={(e) => setKmVolta(Number(e.target.value))}
+                  placeholder="Ex: 45255"
                   className="w-full bg-secondary border border-border rounded-xl p-3 text-base font-bold text-accent focus:border-accent focus:outline-none"
                 />
               </div>
             </div>
           )}
 
-          {/* Odometer Photo Attachment */}
+          {/* Real Photo Attachment */}
           <div>
             <label className="block text-xs font-semibold text-foreground mb-1">
-              Foto do Painel / Odômetro (Anexo Comprovatório)
+              Foto do Painel / Odômetro (Comprovante Real)
             </label>
             <div className="flex items-center gap-3 bg-secondary/60 p-3 rounded-xl border border-border">
-              <img src={fotoUrl} alt="Odômetro" className="w-16 h-12 object-cover rounded-lg border border-border" />
-              <div className="flex-1">
-                <p className="text-xs text-foreground font-semibold">Foto capturada</p>
-                <p className="text-[10px] text-muted-foreground">Leitura visível para auditoria</p>
+              {fotoPreview ? (
+                <img src={fotoPreview} alt="Odômetro" className="w-16 h-14 object-cover rounded-lg border border-border" />
+              ) : (
+                <div className="w-16 h-14 rounded-lg bg-card border border-dashed border-border flex items-center justify-center text-muted-foreground">
+                  <ImageIcon className="w-6 h-6" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-foreground font-semibold truncate">
+                  {fotoFile ? fotoFile.name : 'Nenhum arquivo selecionado'}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  {fotoFile ? `${(fotoFile.size / 1024).toFixed(0)} KB` : 'Tire uma foto ou selecione da galeria'}
+                </p>
               </div>
-              <button
-                type="button"
-                onClick={() =>
-                  setFotoUrl(
-                    fotoUrl === SAMPLE_ODOMETER_PHOTOS[0]
-                      ? SAMPLE_ODOMETER_PHOTOS[1]
-                      : SAMPLE_ODOMETER_PHOTOS[0]
-                  )
-                }
-                className="px-2.5 py-1.5 bg-card hover:bg-muted text-xs font-semibold text-foreground border border-border rounded-lg flex items-center gap-1 cursor-pointer"
-              >
-                <Camera className="w-3.5 h-3.5" />
-                <span>Trocar</span>
-              </button>
+              <label className="px-3 py-1.5 bg-card hover:bg-muted text-xs font-semibold text-foreground border border-border rounded-lg flex items-center gap-1 cursor-pointer">
+                <Camera className="w-3.5 h-3.5 text-accent" />
+                <span>{fotoFile ? 'Alterar' : 'Anexar'}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFotoChange}
+                  className="hidden"
+                />
+              </label>
             </div>
           </div>
 
-          {/* Expenses / Pedágio / Frete (if Volta or Chegada) */}
+          {/* Despesas de viagem (pedagio / frete) */}
           {type !== 'IDA_INICIO' && (
-            <div className="pt-2 border-t border-border">
-              <span className="block text-xs font-semibold text-foreground mb-2">Despesas de Viagem / Custos (R$)</span>
+            <div className="pt-2 border-t border-border space-y-3">
+              <span className="block text-xs font-semibold text-foreground">Despesas / Reembolsos de Viagem</span>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] text-muted-foreground mb-1">Valor Pedágio</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-2.5 text-xs text-muted-foreground">R$</span>
-                    <input
-                      type="number"
-                      step="0.50"
-                      value={pedagio}
-                      onChange={(e) => setPedagio(Number(e.target.value))}
-                      className="w-full bg-secondary border border-border rounded-lg py-2 pl-8 pr-2 text-xs text-foreground focus:border-accent focus:outline-none"
-                    />
-                  </div>
+                  <label className="block text-[11px] text-muted-foreground mb-1">Valor Pedágio (R$)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    value={pedagio === 0 ? '' : pedagio}
+                    onChange={(e) => setPedagio(Number(e.target.value))}
+                    placeholder="0.00"
+                    className="w-full bg-secondary border border-border rounded-lg py-2 px-3 text-xs text-foreground focus:border-accent focus:outline-none"
+                  />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-muted-foreground mb-1">Valor Frete / Devolução</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-2.5 text-xs text-muted-foreground">R$</span>
-                    <input
-                      type="number"
-                      step="1.00"
-                      value={frete}
-                      onChange={(e) => setFrete(Number(e.target.value))}
-                      className="w-full bg-secondary border border-border rounded-lg py-2 pl-8 pr-2 text-xs text-foreground focus:border-accent focus:outline-none"
-                    />
-                  </div>
+                  <label className="block text-[11px] text-muted-foreground mb-1">Valor Frete / Devolução (R$)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    value={frete === 0 ? '' : frete}
+                    onChange={(e) => setFrete(Number(e.target.value))}
+                    placeholder="0.00"
+                    className="w-full bg-secondary border border-border rounded-lg py-2 px-3 text-xs text-foreground focus:border-accent focus:outline-none"
+                  />
                 </div>
               </div>
+
+              {(pedagio > 0 || frete > 0) && (
+                <div>
+                  <label className="block text-[11px] text-muted-foreground mb-1">
+                    Comprovante de Pedágio / Frete (Foto ou Cupom)
+                  </label>
+                  <div className="flex items-center gap-2 bg-secondary/50 p-2.5 rounded-xl border border-border">
+                    {comprovantePreview && (
+                      <img src={comprovantePreview} alt="Comprovante" className="w-10 h-10 object-cover rounded border" />
+                    )}
+                    <span className="text-[11px] text-muted-foreground flex-1 truncate">
+                      {comprovanteFile ? comprovanteFile.name : 'Anexar cupom fiscal / comprovante'}
+                    </span>
+                    <label className="px-2.5 py-1 bg-card hover:bg-muted text-xs rounded-lg border border-border cursor-pointer flex items-center gap-1">
+                      <Upload className="w-3 h-3 text-accent" />
+                      <span>{comprovanteFile ? 'Trocar' : 'Upload'}</span>
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={handleComprovanteChange}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -178,7 +268,7 @@ export const ModalDeslocamento: React.FC<Props> = ({ isOpen, type, initialKm = 4
               className="px-5 py-2 rounded-xl text-xs font-semibold text-white bg-accent hover:bg-accent/90 shadow-md shadow-accent/20 flex items-center gap-1.5 cursor-pointer"
             >
               <Check className="w-4 h-4" />
-              <span>Salvar Registros</span>
+              <span>Confirmar Registro</span>
             </button>
           </div>
         </form>

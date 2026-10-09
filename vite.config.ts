@@ -17,6 +17,17 @@ export default defineConfig(({ mode }) => {
           target: apiTarget,
           changeOrigin: true,
           secure: false,
+          autoRewrite: true,
+          configure: (proxy) => {
+            proxy.on('proxyRes', (proxyRes) => {
+              if (proxyRes.headers.location) {
+                proxyRes.headers.location = proxyRes.headers.location.replace(
+                  /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?/,
+                  ''
+                );
+              }
+            });
+          },
         },
         '/static': {
           target: apiTarget,

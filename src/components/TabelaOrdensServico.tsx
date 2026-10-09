@@ -37,7 +37,17 @@ export const TabelaOrdensServico: React.FC<Props> = ({
 
   // Filter logic
   const filtered = chamados.filter((item) => {
-    if (filterStatus !== 'TODOS' && item.status !== filterStatus) return false;
+    if (filterStatus !== 'TODOS') {
+      const target = String(filterStatus).toUpperCase().replace(/\s+/g, '_');
+      const current = String(item.status).toUpperCase().replace(/\s+/g, '_');
+      if (target === 'ABERTO') {
+        if (current !== 'ABERTO' && current !== 'AGENDADO') return false;
+      } else if (target === 'CONCLUIDO') {
+        if (current !== 'CONCLUIDO' && current !== 'FINALIZADO') return false;
+      } else if (target !== current) {
+        return false;
+      }
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const matchCode = item.codigo_os.toLowerCase().includes(q);
