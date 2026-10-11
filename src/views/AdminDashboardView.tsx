@@ -36,20 +36,27 @@ import {
   Filter,
   X,
   FileSpreadsheet,
+  UserCheck,
+  UserX,
+  Power,
 } from 'lucide-react';
 
 interface Props {
   onLogout?: () => void;
-  onSwitchToTechView?: () => void;
 }
 
 export type PeriodoFiltro = 'TODOS' | 'HOJE' | 'ULTIMOS_7' | 'ESTE_MES' | 'ULTIMOS_30' | 'CUSTOM';
+export type StatusFilterAtividade = 'ATIVOS' | 'TODOS' | 'INATIVOS';
 
-export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechView }) => {
+export const AdminDashboardView: React.FC<Props> = ({ onLogout }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const [chamados, setChamados] = useState<OrdemServico[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
+
+  // Soft delete / activity status filters (defaults to ATIVOS)
+  const [filtroStatusCliente, setFiltroStatusCliente] = useState<StatusFilterAtividade>('ATIVOS');
+  const [filtroStatusTecnico, setFiltroStatusTecnico] = useState<StatusFilterAtividade>('ATIVOS');
 
   // Date filter state
   const [periodoSelecionado, setPeriodoSelecionado] = useState<PeriodoFiltro>('TODOS');
@@ -298,6 +305,17 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechVi
     }
   };
 
+  const handleToggleStatusCliente = async (cliente: Cliente) => {
+    const novoStatus = !(cliente.is_active !== false);
+    try {
+      await ChamadoService.alternarStatusCliente(cliente.id_cliente, novoStatus);
+      await loadData();
+      setErrorMsg(null);
+    } catch (err: any) {
+      setErrorMsg(err?.detail || err?.message || 'Erro ao alternar status do cliente.');
+    }
+  };
+
   // --- HANDLERS: TECNICO ---
   const handleSaveTecnico = async (data: any) => {
     try {
@@ -324,6 +342,17 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechVi
     }
   };
 
+  const handleToggleStatusTecnico = async (tecnico: Tecnico) => {
+    const novoStatus = !(tecnico.is_active !== false);
+    try {
+      await ChamadoService.alternarStatusTecnico(tecnico.id_tecnico, novoStatus);
+      await loadData();
+      setErrorMsg(null);
+    } catch (err: any) {
+      setErrorMsg(err?.detail || err?.message || 'Erro ao alternar status do técnico.');
+    }
+  };
+
   const getTabTitle = () => {
     switch (activeTab) {
       case 'dashboard':
@@ -339,18 +368,32 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechVi
     }
   };
 
-  const filteredClientes = clientes.filter(
-    (c) =>
+  const filteredClientes = clientes.filter((c) => {
+    const matchesSearch =
       (c.nome_fantasia || c.razao_social || '').toLowerCase().includes(searchCliente.toLowerCase()) ||
       (c.cidade || '').toLowerCase().includes(searchCliente.toLowerCase()) ||
-      (c.cnpj_cpf || '').includes(searchCliente)
-  );
+      (c.cnpj_cpf || '').includes(searchCliente);
 
-  const filteredTecnicos = tecnicos.filter(
-    (t) =>
+    if (!matchesSearch) return false;
+
+    const isActive = c.is_active !== false;
+    if (filtroStatusCliente === 'ATIVOS') return isActive;
+    if (filtroStatusCliente === 'INATIVOS') return !isActive;
+    return true; // TODOS
+  });
+
+  const filteredTecnicos = tecnicos.filter((t) => {
+    const matchesSearch =
       t.nome.toLowerCase().includes(searchTecnico.toLowerCase()) ||
-      (t.email && t.email.toLowerCase().includes(searchTecnico.toLowerCase()))
-  );
+      (t.email && t.email.toLowerCase().includes(searchTecnico.toLowerCase()));
+
+    if (!matchesSearch) return false;
+
+    const isActive = t.is_active !== false;
+    if (filtroStatusTecnico === 'ATIVOS') return isActive;
+    if (filtroStatusTecnico === 'INATIVOS') return !isActive;
+    return true; // TODOS
+  });
 
   return (
     <div className="flex min-h-screen bg-background text-foreground font-sans">
@@ -378,7 +421,6 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechVi
             setShowNovaOSModal(true);
           }}
           onLogout={onLogout}
-          onSwitchToTechView={onSwitchToTechView}
         />
 
         <main className="p-6 space-y-6 max-w-7xl mx-auto w-full">
@@ -671,26 +713,99 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechVi
                 </div>
               </div>
 
+              {/* Filtros de Atividade / Soft Delete */}
+              <div className="flex flex-wrap items-center gap-2 p-1.5 bg-secondary/50 rounded-2xl border border-border w-fit text-xs">
+                <span className="text-[11px] font-bold text-muted-foreground px-2 flex items-center gap-1">
+                  <Filter className="w-3.5 h-3.5" /> Filtrar Status:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFiltroStatusCliente('ATIVOS')}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    filtroStatusCliente === 'ATIVOS'
+                      ? 'bg-primary text-primary-foreground shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                  }`}
+                >
+                  <UserCheck className="w-3.5 h-3.5" />
+                  <span>Apenas Ativos (Padrão)</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-background/20 font-extrabold">
+                    {clientes.filter((c) => c.is_active !== false).length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFiltroStatusCliente('TODOS')}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    filtroStatusCliente === 'TODOS'
+                      ? 'bg-primary text-primary-foreground shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                  }`}
+                >
+                  <span>Todos os Registros</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-background/20 font-extrabold">
+                    {clientes.length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFiltroStatusCliente('INATIVOS')}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    filtroStatusCliente === 'INATIVOS'
+                      ? 'bg-amber-500 text-white shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                  }`}
+                >
+                  <UserX className="w-3.5 h-3.5" />
+                  <span>Inativos / Soft Delete</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-background/20 font-extrabold">
+                    {clientes.filter((c) => c.is_active === false).length}
+                  </span>
+                </button>
+              </div>
+
               {/* Clientes Grid */}
               {filteredClientes.length === 0 ? (
                 <div className="p-12 text-center text-muted-foreground bg-secondary/30 rounded-2xl border border-dashed border-border">
                   <Building className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                  <p className="font-bold text-foreground">Nenhum cliente cadastrado no sistema</p>
-                  <p className="text-xs mt-1">Clique em "Novo Cliente" acima para registrar o primeiro cliente no backend.</p>
+                  <p className="font-bold text-foreground">
+                    {filtroStatusCliente === 'INATIVOS'
+                      ? 'Nenhum cliente inativo (soft deleted) encontrado.'
+                      : 'Nenhum cliente cadastrado no sistema'}
+                  </p>
+                  <p className="text-xs mt-1">
+                    {filtroStatusCliente === 'INATIVOS'
+                      ? 'Todos os seus clientes estão ativos no momento.'
+                      : 'Clique em "Novo Cliente" acima para registrar o primeiro cliente no backend.'}
+                  </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {filteredClientes.map((cli) => {
                     const totalClienteOS = chamados.filter((c) => c.id_cliente === cli.id_cliente).length;
+                    const isAtivo = cli.is_active !== false;
                     return (
                       <div
                         key={cli.id_cliente}
-                        className="bg-card border border-border rounded-2xl p-5 space-y-4 hover:border-accent/40 transition-all flex flex-col justify-between shadow-sm"
+                        className={`bg-card border rounded-2xl p-5 space-y-4 transition-all flex flex-col justify-between shadow-sm ${
+                          isAtivo ? 'border-border hover:border-accent/40' : 'border-amber-500/30 bg-amber-500/5'
+                        }`}
                       >
                         <div>
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <h3 className="text-sm font-extrabold text-foreground">{cli.razao_social}</h3>
+                              <div className="flex items-center gap-2">
+                                <h3 className="text-sm font-extrabold text-foreground">{cli.razao_social}</h3>
+                                {isAtivo ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                                    <UserCheck className="w-3 h-3" /> Ativo
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                    <UserX className="w-3 h-3" /> Inativo (Soft Delete)
+                                  </span>
+                                )}
+                              </div>
                               {cli.codigo && (
                                 <p className="text-[11px] text-accent font-semibold">Código: #{cli.codigo}</p>
                               )}
@@ -723,6 +838,7 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechVi
 
                         <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
                           <button
+                            type="button"
                             onClick={() => {
                               setClienteEdicao(cli);
                               setShowClienteModal(true);
@@ -732,6 +848,20 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechVi
                             <Edit2 className="w-3.5 h-3.5" /> Editar
                           </button>
                           <button
+                            type="button"
+                            onClick={() => handleToggleStatusCliente(cli)}
+                            title={isAtivo ? 'Desativar cliente (Soft Delete)' : 'Reativar cliente no sistema'}
+                            className={`px-3 py-1.5 border rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors ${
+                              isAtivo
+                                ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border-amber-500/30'
+                                : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border-emerald-500/30'
+                            }`}
+                          >
+                            <Power className="w-3.5 h-3.5" />
+                            <span>{isAtivo ? 'Desativar (Soft)' : 'Reativar'}</span>
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setClienteParaExcluir(cli)}
                             className="px-3 py-1.5 bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/30 rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
                           >
@@ -783,12 +913,71 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechVi
                 </div>
               </div>
 
+              {/* Filtros de Atividade / Soft Delete Técnicos */}
+              <div className="flex flex-wrap items-center gap-2 p-1.5 bg-secondary/50 rounded-2xl border border-border w-fit text-xs">
+                <span className="text-[11px] font-bold text-muted-foreground px-2 flex items-center gap-1">
+                  <Filter className="w-3.5 h-3.5" /> Filtrar Status:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFiltroStatusTecnico('ATIVOS')}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    filtroStatusTecnico === 'ATIVOS'
+                      ? 'bg-primary text-primary-foreground shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                  }`}
+                >
+                  <UserCheck className="w-3.5 h-3.5" />
+                  <span>Apenas Ativos (Padrão)</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-background/20 font-extrabold">
+                    {tecnicos.filter((t) => t.is_active !== false).length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFiltroStatusTecnico('TODOS')}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    filtroStatusTecnico === 'TODOS'
+                      ? 'bg-primary text-primary-foreground shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                  }`}
+                >
+                  <span>Todos os Registros</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-background/20 font-extrabold">
+                    {tecnicos.length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFiltroStatusTecnico('INATIVOS')}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    filtroStatusTecnico === 'INATIVOS'
+                      ? 'bg-amber-500 text-white shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                  }`}
+                >
+                  <UserX className="w-3.5 h-3.5" />
+                  <span>Inativos / Soft Delete</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-background/20 font-extrabold">
+                    {tecnicos.filter((t) => t.is_active === false).length}
+                  </span>
+                </button>
+              </div>
+
               {/* Técnicos Grid */}
               {filteredTecnicos.length === 0 ? (
                 <div className="p-12 text-center text-muted-foreground bg-secondary/30 rounded-2xl border border-dashed border-border">
                   <Wrench className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                  <p className="font-bold text-foreground">Nenhum técnico cadastrado no sistema</p>
-                  <p className="text-xs mt-1">Clique em "Novo Técnico" acima para cadastrar integrantes da equipe técnica.</p>
+                  <p className="font-bold text-foreground">
+                    {filtroStatusTecnico === 'INATIVOS'
+                      ? 'Nenhum técnico inativo (soft deleted) encontrado.'
+                      : 'Nenhum técnico cadastrado no sistema'}
+                  </p>
+                  <p className="text-xs mt-1">
+                    {filtroStatusTecnico === 'INATIVOS'
+                      ? 'Todos os seus técnicos estão ativos no momento.'
+                      : 'Clique em "Novo Técnico" acima para cadastrar integrantes da equipe técnica.'}
+                  </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -798,19 +987,33 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechVi
                       (c) => c.status === 'EM_ATENDIMENTO' || c.status === 'ABERTO' || c.status === 'PAUSADO'
                     ).length;
                     const concluidasCount = chamadosTecnico.filter((c) => c.status === 'CONCLUIDO').length;
+                    const isAtivo = tec.is_active !== false;
 
                     return (
                       <div
                         key={tec.id_tecnico}
-                        className="bg-card border border-border rounded-2xl p-5 space-y-4 hover:border-accent/40 transition-all flex flex-col justify-between shadow-sm"
+                        className={`bg-card border rounded-2xl p-5 space-y-4 transition-all flex flex-col justify-between shadow-sm ${
+                          isAtivo ? 'border-border hover:border-accent/40' : 'border-amber-500/30 bg-amber-500/5'
+                        }`}
                       >
                         <div className="space-y-3">
                           <div className="flex items-center gap-3">
                             <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-primary text-base">
                               {tec.nome.slice(0, 2).toUpperCase()}
                             </div>
-                            <div>
-                              <h3 className="text-sm font-extrabold text-foreground">{tec.nome}</h3>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1">
+                                <h3 className="text-sm font-extrabold text-foreground truncate">{tec.nome}</h3>
+                                {isAtivo ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 shrink-0">
+                                    <UserCheck className="w-3 h-3" /> Ativo
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20 shrink-0">
+                                    <UserX className="w-3 h-3" /> Inativo
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-xs text-accent font-semibold">
                                 {tec.role === 'admin' ? 'Administrador Mestre' : 'Técnico de Campo'}
                               </p>
@@ -820,15 +1023,16 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechVi
                           <div className="space-y-1.5 text-xs text-muted-foreground pt-2 border-t border-border">
                             <p className="flex items-center gap-2">
                               <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                              <span className="text-foreground/90">{tec.email}</span>
+                              <span className="text-foreground/90 truncate">{tec.email}</span>
                             </p>
                             <p className="flex items-center gap-2">
                               <Phone className="w-3.5 h-3.5 text-success shrink-0" />
                               <span className="text-foreground/90">{tec.telefone}</span>
                             </p>
                             {tec.cpf && (
-                              <p className="text-[11px] text-muted-foreground">
-                                CPF: <strong className="text-foreground">{tec.cpf}</strong> • CNPJ: <strong className="text-foreground">{tec.cnpj}</strong>
+                              <p className="text-[11px] text-muted-foreground truncate">
+                                CPF: <strong className="text-foreground">{tec.cpf}</strong>
+                                {tec.cnpj ? <> • CNPJ: <strong className="text-foreground">{tec.cnpj}</strong></> : null}
                               </p>
                             )}
                           </div>
@@ -848,6 +1052,7 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechVi
 
                         <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
                           <button
+                            type="button"
                             onClick={() => {
                               setTecnicoEdicao(tec);
                               setShowTecnicoModal(true);
@@ -857,6 +1062,20 @@ export const AdminDashboardView: React.FC<Props> = ({ onLogout, onSwitchToTechVi
                             <Edit2 className="w-3.5 h-3.5" /> Editar
                           </button>
                           <button
+                            type="button"
+                            onClick={() => handleToggleStatusTecnico(tec)}
+                            title={isAtivo ? 'Desativar técnico (Soft Delete)' : 'Reativar técnico no sistema'}
+                            className={`px-3 py-1.5 border rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors ${
+                              isAtivo
+                                ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border-amber-500/30'
+                                : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border-emerald-500/30'
+                            }`}
+                          >
+                            <Power className="w-3.5 h-3.5" />
+                            <span>{isAtivo ? 'Desativar (Soft)' : 'Reativar'}</span>
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setTecnicoParaExcluir(tec)}
                             className="px-3 py-1.5 bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/30 rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
                           >

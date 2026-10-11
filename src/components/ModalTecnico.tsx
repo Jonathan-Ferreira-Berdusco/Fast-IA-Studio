@@ -27,6 +27,7 @@ export const ModalTecnico: React.FC<Props> = ({
   const [agencia, setAgencia] = useState('');
   const [conta, setConta] = useState('');
   const [pix, setPix] = useState('');
+  const [isActive, setIsActive] = useState(true);
 
   useEffect(() => {
     if (tecnicoEdicao) {
@@ -42,6 +43,7 @@ export const ModalTecnico: React.FC<Props> = ({
       setAgencia(tecnicoEdicao.dados_bancarios?.agencia || tecnicoEdicao.agencia || '');
       setConta(tecnicoEdicao.dados_bancarios?.conta || tecnicoEdicao.conta || '');
       setPix(tecnicoEdicao.dados_bancarios?.pix || tecnicoEdicao.pix || '');
+      setIsActive(tecnicoEdicao.is_active !== false);
     } else {
       setNome('');
       setEmail('');
@@ -55,6 +57,7 @@ export const ModalTecnico: React.FC<Props> = ({
       setAgencia('0001');
       setConta('12345-6');
       setPix('');
+      setIsActive(true);
     }
   }, [tecnicoEdicao, isOpen]);
 
@@ -83,6 +86,7 @@ export const ModalTecnico: React.FC<Props> = ({
       inscricao_estadual: inscricaoEstadual.trim() || undefined,
       telefone: telefone.trim(),
       role,
+      is_active: isActive,
       banco: banco.trim() || 'Banco do Brasil',
       agencia: agencia.trim() || '0001',
       conta: conta.trim() || '12345-6',
@@ -298,6 +302,29 @@ export const ModalTecnico: React.FC<Props> = ({
                 />
               </div>
             </div>
+          </div>
+
+          {/* Status de Atividade (Soft Delete) */}
+          <div className="bg-secondary/40 border border-border rounded-2xl p-3.5 flex items-center justify-between">
+            <div>
+              <span className="font-bold text-xs text-foreground block">Status de Atividade no Sistema</span>
+              <span className="text-[11px] text-muted-foreground">
+                {isActive
+                  ? 'Técnico Ativo. Elegível para atribuição e agendamento de chamados.'
+                  : 'Técnico Inativo (Soft Delete). Oculto das atribuições de novas OS.'}
+              </span>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+                className="w-4 h-4 rounded bg-secondary border-border accent-emerald-500 cursor-pointer"
+              />
+              <span className={`text-xs font-bold ${isActive ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+                {isActive ? 'Ativo' : 'Inativo (Excluído)'}
+              </span>
+            </label>
           </div>
 
           <div className="pt-4 border-t border-border flex items-center justify-end gap-3 shrink-0">
